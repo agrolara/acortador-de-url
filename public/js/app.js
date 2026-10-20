@@ -528,8 +528,114 @@ function escapeHtml(string) {
 // -------------------------------------------------------------
 let currentStandeeShape = 'vertical';
 let currentNfcIcon = 'waves';
+let currentCornerRadius = 28; // 0px para bordes rectos, 28px redondeados, 45px muy curvos
 
 function setupStandeeDesigner() {
+  // Logo del Negocio (Arriba a la Izquierda)
+  const logoToggle = document.getElementById('showBusinessLogoToggle');
+  const logoControls = document.getElementById('businessLogoControls');
+  const logoFileInput = document.getElementById('businessLogoFileInput');
+  const logoUrlInput = document.getElementById('businessLogoUrlInput');
+  const logoShapeSelect = document.getElementById('businessLogoShapeSelect');
+  const logoSizeSlider = document.getElementById('businessLogoSizeSlider');
+  const logoSizeLabel = document.getElementById('logoSizeLabel');
+  const removeLogoBtn = document.getElementById('removeBusinessLogoBtn');
+  const previewLogoWrap = document.getElementById('previewBusinessLogoWrapper');
+  const previewLogoImg = document.getElementById('previewBusinessLogoImg');
+  const previewTopBanner = document.getElementById('previewTopBanner');
+  const previewTitlesContainer = document.getElementById('previewTitlesContainer');
+
+  const defaultSampleLogo = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f0ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'></path><polyline points='9 22 9 12 15 12 15 22'></polyline></svg>";
+
+  function applyLogoShape(shape) {
+    if (!previewLogoImg) return;
+    if (shape === 'circle') {
+      previewLogoImg.className = 'object-contain rounded-full p-1 bg-white/10 backdrop-blur-md border border-cyan-400/40 shadow-lg shadow-cyan-500/20 transition-all';
+    } else if (shape === 'transparent') {
+      previewLogoImg.className = 'object-contain rounded-none p-0 bg-transparent border-0 shadow-none transition-all';
+    } else {
+      // 'square'
+      previewLogoImg.className = 'object-contain rounded-2xl p-1 bg-white/10 backdrop-blur-md border border-cyan-400/40 shadow-lg shadow-cyan-500/20 transition-all';
+    }
+  }
+
+  if (logoToggle) {
+    logoToggle.addEventListener('change', () => {
+      const isChecked = logoToggle.checked;
+      if (logoControls) logoControls.classList.toggle('hidden', !isChecked);
+      if (previewLogoWrap) previewLogoWrap.classList.toggle('hidden', !isChecked);
+
+      if (previewTopBanner && previewTitlesContainer) {
+        if (isChecked) {
+          previewTopBanner.classList.remove('justify-center');
+          previewTopBanner.classList.add('justify-start');
+          previewTitlesContainer.classList.remove('text-center');
+          previewTitlesContainer.classList.add('text-left');
+          if (!previewLogoImg.getAttribute('src')) {
+            previewLogoImg.src = defaultSampleLogo;
+          }
+        } else {
+          previewTopBanner.classList.add('justify-center');
+          previewTopBanner.classList.remove('justify-start');
+          previewTitlesContainer.classList.add('text-center');
+          previewTitlesContainer.classList.remove('text-left');
+        }
+      }
+    });
+  }
+
+  if (logoFileInput && previewLogoImg) {
+    logoFileInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          previewLogoImg.src = evt.target.result;
+          if (logoUrlInput) logoUrlInput.value = '';
+          showToast('Logo cargado correctamente', 'success');
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  if (logoUrlInput && previewLogoImg) {
+    logoUrlInput.addEventListener('input', () => {
+      const url = logoUrlInput.value.trim();
+      if (url) {
+        previewLogoImg.src = url;
+      }
+    });
+  }
+
+  if (logoShapeSelect) {
+    logoShapeSelect.addEventListener('change', () => {
+      applyLogoShape(logoShapeSelect.value);
+    });
+  }
+
+  if (logoSizeSlider && previewLogoImg) {
+    logoSizeSlider.addEventListener('input', () => {
+      const px = logoSizeSlider.value;
+      if (logoSizeLabel) logoSizeLabel.textContent = `${px}px`;
+      previewLogoImg.style.width = `${px}px`;
+      previewLogoImg.style.height = `${px}px`;
+    });
+  }
+
+  if (removeLogoBtn) {
+    removeLogoBtn.addEventListener('click', () => {
+      if (previewLogoImg) previewLogoImg.src = '';
+      if (logoFileInput) logoFileInput.value = '';
+      if (logoUrlInput) logoUrlInput.value = '';
+      if (logoToggle) {
+        logoToggle.checked = false;
+        logoToggle.dispatchEvent(new Event('change'));
+      }
+      showToast('Logo eliminado del cartel', 'info');
+    });
+  }
+
   // Título Línea 1 y Línea 2
   const t1 = document.getElementById('standeeTitleL1');
   const t2 = document.getElementById('standeeTitleL2');
@@ -694,7 +800,33 @@ function setupStandeeDesigner() {
       window.print();
     });
   }
+
+  // Inicializar dimensiones y bordes por defecto
+  updateStandeeDimensions();
 }
+
+// -------------------------------------------------------------
+// CONTROLADOR DE BORDES RECTOS VS REDONDEADOS
+// -------------------------------------------------------------
+window.setStandeeCornerRadius = function(radiusPx) {
+  currentCornerRadius = radiusPx;
+  const standee = document.getElementById('printableStandee');
+  if (standee && currentStandeeShape !== 'circle') {
+    standee.style.borderRadius = `${radiusPx}px`;
+  }
+
+  // Actualizar estado de los botones de borde
+  const btnStraight = document.getElementById('cornerBtn_straight');
+  const btnRounded = document.getElementById('cornerBtn_rounded');
+  const btnSuper = document.getElementById('cornerBtn_super');
+
+  const activeClass = 'p-2 rounded-xl border border-cyan-500 bg-cyan-950/60 text-cyan-300 text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-md shadow-cyan-950';
+  const inactiveClass = 'p-2 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-bold flex items-center justify-center gap-1.5 transition';
+
+  if (btnStraight) btnStraight.className = (radiusPx === 0) ? activeClass : inactiveClass;
+  if (btnRounded) btnRounded.className = (radiusPx === 28) ? activeClass : inactiveClass;
+  if (btnSuper) btnSuper.className = (radiusPx === 45) ? activeClass : inactiveClass;
+};
 
 // -------------------------------------------------------------
 // CONTROLADOR DE FORMA (VERTICAL, CUADRADO, CIRCULAR, HORIZONTAL)
@@ -741,14 +873,14 @@ function updateStandeeDimensions() {
     standee.style.padding = '2.5rem 1.75rem';
     if (centerArea) centerArea.className = 'relative z-10 py-1 flex items-center justify-around gap-2 my-auto';
   } else if (currentStandeeShape === 'square') {
-    standee.style.borderRadius = '2rem';
+    standee.style.borderRadius = `${currentCornerRadius}px`;
     standee.style.aspectRatio = '1 / 1';
     standee.style.maxWidth = '380px';
     standee.style.minHeight = '380px';
     standee.style.padding = '1.75rem 1.5rem';
     if (centerArea) centerArea.className = 'relative z-10 py-1 flex items-center justify-between gap-3 my-auto';
   } else if (currentStandeeShape === 'horizontal') {
-    standee.style.borderRadius = '1.75rem';
+    standee.style.borderRadius = `${currentCornerRadius}px`;
     standee.style.aspectRatio = '9 / 5';
     standee.style.maxWidth = '440px';
     standee.style.minHeight = 'auto';
@@ -756,7 +888,7 @@ function updateStandeeDimensions() {
     if (centerArea) centerArea.className = 'relative z-10 py-1 flex items-center justify-around gap-3 my-auto';
   } else {
     // Vertical Estándar
-    standee.style.borderRadius = '2.5rem';
+    standee.style.borderRadius = `${currentCornerRadius}px`;
     standee.style.aspectRatio = `${wCm} / ${hCm}`;
     standee.style.maxWidth = '390px';
     standee.style.minHeight = 'auto';
