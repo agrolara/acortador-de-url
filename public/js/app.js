@@ -526,6 +526,9 @@ function escapeHtml(string) {
 // -------------------------------------------------------------
 // ESTUDIO DISEÑADOR DE CARTEL PARA MOSTRADOR & PLACA NFC / QR
 // -------------------------------------------------------------
+let currentStandeeShape = 'vertical';
+let currentNfcIcon = 'waves';
+
 function setupStandeeDesigner() {
   // Título Línea 1 y Línea 2
   const t1 = document.getElementById('standeeTitleL1');
@@ -616,6 +619,41 @@ function setupStandeeDesigner() {
     });
   }
 
+  // Control de Dimensiones en Centímetros (cm)
+  const wInput = document.getElementById('standeeWidthCm');
+  const hInput = document.getElementById('standeeHeightCm');
+  if (wInput) wInput.addEventListener('input', updateStandeeDimensions);
+  if (hInput) hInput.addEventListener('input', updateStandeeDimensions);
+
+  // Sliders de Ajuste Fino (Escala del QR y Tipografía)
+  const qrSlider = document.getElementById('qrScaleSlider');
+  const qrLabel = document.getElementById('qrScaleLabel');
+  if (qrSlider) {
+    qrSlider.addEventListener('input', () => {
+      const val = qrSlider.value;
+      qrLabel.textContent = `${val}%`;
+      const qrImg = document.getElementById('standeeQrImg');
+      if (qrImg) {
+        const baseSize = 8; // rem base (128px)
+        qrImg.style.width = `${(baseSize * val) / 100}rem`;
+        qrImg.style.height = `${(baseSize * val) / 100}rem`;
+      }
+    });
+  }
+
+  const fontSlider = document.getElementById('fontScaleSlider');
+  const fontLabel = document.getElementById('fontScaleLabel');
+  if (fontSlider) {
+    fontSlider.addEventListener('input', () => {
+      const val = fontSlider.value;
+      fontLabel.textContent = `${val}%`;
+      const p1 = document.getElementById('previewTitleL1');
+      const p2 = document.getElementById('previewTitleL2');
+      if (p1) p1.style.fontSize = `${(1.875 * val) / 100}rem`;
+      if (p2) p2.style.fontSize = `${(1.5 * val) / 100}rem`;
+    });
+  }
+
   // Descarga en Alta Resolución (PNG 300 DPI con html2canvas)
   const downloadPngBtn = document.getElementById('downloadStandeePngBtn');
   if (downloadPngBtn) {
@@ -623,11 +661,14 @@ function setupStandeeDesigner() {
       const standee = document.getElementById('printableStandee');
       if (!standee) return;
 
-      showToast('Generando cartel en ultra alta definición (PNG)...', 'info');
+      const wCm = parseFloat(document.getElementById('standeeWidthCm').value) || 10;
+      const hCm = parseFloat(document.getElementById('standeeHeightCm').value) || 15;
+
+      showToast(`Generando tarjeta para imprenta (${wCm} x ${hCm} cm a 300 DPI)...`, 'info');
 
       try {
         const canvas = await html2canvas(standee, {
-          scale: 3, // Multiplicador 3x para calidad óptima de impresión física
+          scale: 3, // Multiplicador 3x para calidad óptima de imprenta profesional
           useCORS: true,
           backgroundColor: null,
           logging: false
@@ -635,13 +676,13 @@ function setupStandeeDesigner() {
 
         const slug = activeUrl ? activeUrl.slug : 'mostrador';
         const link = document.createElement('a');
-        link.download = `cartel-mostrador-${slug}.png`;
+        link.download = `tarjeta-${slug}-${currentStandeeShape}-${wCm}x${hCm}cm.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
-        showToast('¡Cartel HD descargado con éxito!', 'success');
+        showToast('¡Tarjeta HD descargada con éxito!', 'success');
       } catch (err) {
-        console.error('Error al generar imagen de cartel:', err);
-        showToast('Error al exportar cartel en imagen', 'error');
+        console.error('Error al generar imagen de tarjeta:', err);
+        showToast('Error al exportar tarjeta en imagen', 'error');
       }
     });
   }
@@ -655,6 +696,101 @@ function setupStandeeDesigner() {
   }
 }
 
+// -------------------------------------------------------------
+// CONTROLADOR DE FORMA (VERTICAL, CUADRADO, CIRCULAR, HORIZONTAL)
+// -------------------------------------------------------------
+window.setStandeeShape = function(shape, wCm, hCm) {
+  currentStandeeShape = shape;
+  const wInput = document.getElementById('standeeWidthCm');
+  const hInput = document.getElementById('standeeHeightCm');
+  if (wInput) wInput.value = wCm;
+  if (hInput) hInput.value = hCm;
+
+  // Actualizar botones activos de forma
+  const shapes = ['vertical', 'square', 'circle', 'horizontal'];
+  shapes.forEach(s => {
+    const btn = document.getElementById(`shapeBtn${s.charAt(0).toUpperCase() + s.slice(1)}`);
+    if (btn) {
+      if (s === shape) {
+        btn.className = 'p-2.5 rounded-xl border border-cyan-500 bg-cyan-950/60 text-cyan-300 text-xs font-bold flex flex-col items-center gap-1 transition shadow-md shadow-cyan-950';
+      } else {
+        btn.className = 'p-2.5 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-bold flex flex-col items-center gap-1 transition';
+      }
+    }
+  });
+
+  updateStandeeDimensions();
+};
+
+function updateStandeeDimensions() {
+  const standee = document.getElementById('printableStandee');
+  if (!standee) return;
+
+  const wCm = parseFloat(document.getElementById('standeeWidthCm').value) || 10;
+  const hCm = parseFloat(document.getElementById('standeeHeightCm').value) || 15;
+
+  const centerArea = document.getElementById('previewCenterArea');
+  const bottomArea = document.getElementById('previewBottomArea');
+  const headerArea = document.getElementById('previewHeaderArea');
+
+  if (currentStandeeShape === 'circle') {
+    standee.style.borderRadius = '9999px';
+    standee.style.aspectRatio = '1 / 1';
+    standee.style.maxWidth = '380px';
+    standee.style.minHeight = '380px';
+    standee.style.padding = '2.5rem 1.75rem';
+    if (centerArea) centerArea.className = 'relative z-10 py-1 flex items-center justify-around gap-2 my-auto';
+  } else if (currentStandeeShape === 'square') {
+    standee.style.borderRadius = '2rem';
+    standee.style.aspectRatio = '1 / 1';
+    standee.style.maxWidth = '380px';
+    standee.style.minHeight = '380px';
+    standee.style.padding = '1.75rem 1.5rem';
+    if (centerArea) centerArea.className = 'relative z-10 py-1 flex items-center justify-between gap-3 my-auto';
+  } else if (currentStandeeShape === 'horizontal') {
+    standee.style.borderRadius = '1.75rem';
+    standee.style.aspectRatio = '9 / 5';
+    standee.style.maxWidth = '440px';
+    standee.style.minHeight = 'auto';
+    standee.style.padding = '1.5rem';
+    if (centerArea) centerArea.className = 'relative z-10 py-1 flex items-center justify-around gap-3 my-auto';
+  } else {
+    // Vertical Estándar
+    standee.style.borderRadius = '2.5rem';
+    standee.style.aspectRatio = `${wCm} / ${hCm}`;
+    standee.style.maxWidth = '390px';
+    standee.style.minHeight = 'auto';
+    standee.style.padding = '1.75rem';
+    if (centerArea) centerArea.className = 'relative z-10 py-2 flex items-center justify-between gap-3 my-auto';
+  }
+}
+
+// -------------------------------------------------------------
+// CONTROLADOR DE ICONOS NFC (WAVES, PHONE, LOGO, CHIP)
+// -------------------------------------------------------------
+window.setNfcIcon = function(type) {
+  currentNfcIcon = type;
+  const icons = ['waves', 'phone', 'logo', 'chip'];
+
+  icons.forEach(i => {
+    const el = document.getElementById(`nfcSvg_${i}`);
+    const btn = document.getElementById(`nfcIconBtn_${i}`);
+    if (el) {
+      el.classList.toggle('hidden', i !== type);
+    }
+    if (btn) {
+      if (i === type) {
+        btn.className = 'p-2 rounded-xl border border-cyan-500 bg-cyan-950/60 text-cyan-300 flex flex-col items-center gap-1 transition shadow-md shadow-cyan-950';
+      } else {
+        btn.className = 'p-2 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-300 flex flex-col items-center gap-1 transition';
+      }
+    }
+  });
+};
+
+// -------------------------------------------------------------
+// CONTROLADOR DE TEMAS DE COLOR DEL CARTEL
+// -------------------------------------------------------------
 window.setStandeeTheme = function(theme) {
   const standee = document.getElementById('printableStandee');
   const t1 = document.getElementById('previewTitleL1');
@@ -688,4 +824,5 @@ window.setStandeeTheme = function(theme) {
     if (t2) { t2.classList.add('standee-neon-text'); t2.style.color = '#ffffff'; }
   }
 };
+
 
