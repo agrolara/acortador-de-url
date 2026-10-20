@@ -10,14 +10,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <style>
-    body {
-      font-family: 'Plus Jakarta Sans', sans-serif;
-    }
-    .mono {
-      font-family: 'JetBrains Mono', monospace;
-    }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
     .glass {
-      background: rgba(15, 23, 42, 0.75);
+      background: rgba(15, 23, 42, 0.78);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border: 1px solid rgba(255, 255, 255, 0.08);
@@ -38,7 +34,7 @@
   <!-- VISTA DE LOGIN SUPERADMIN                 -->
   <!-- ========================================== -->
   <div id="loginView" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-xl">
-    <div class="glass max-w-md w-full rounded-2xl p-8 shadow-2xl glow-cyan border border-cyan-500/20 text-center">
+    <div class="glass max-w-md w-full rounded-3xl p-8 shadow-2xl glow-cyan border border-cyan-500/20 text-center">
       <div class="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-tr from-cyan-600 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/30">
         <i data-lucide="shield-check" class="w-9 h-9 text-white"></i>
       </div>
@@ -96,13 +92,42 @@
           </div>
         </div>
 
-        <div class="flex items-center gap-3">
+        <!-- Acciones de Cabecera -->
+        <div class="flex items-center gap-2.5">
+          <!-- Menú Exportar -->
+          <div class="relative group">
+            <button class="text-xs font-semibold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-cyan-400"></i>
+              <span>Exportar</span>
+            </button>
+            <div class="absolute right-0 mt-1 w-36 glass rounded-xl shadow-xl py-1 hidden group-hover:block z-50 border border-slate-800">
+              <a href="/api/export/csv" class="block px-3 py-2 text-xs text-slate-300 hover:bg-cyan-500 hover:text-slate-950 transition flex items-center gap-2">
+                <i data-lucide="sheet" class="w-3.5 h-3.5"></i>
+                <span>CSV (Excel)</span>
+              </a>
+              <a href="/api/export/json" class="block px-3 py-2 text-xs text-slate-300 hover:bg-cyan-500 hover:text-slate-950 transition flex items-center gap-2">
+                <i data-lucide="file-json" class="w-3.5 h-3.5"></i>
+                <span>JSON</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Botón Configuración Global -->
+          <button 
+            id="openSettingsBtn"
+            class="text-xs font-semibold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3 py-2 rounded-xl transition flex items-center gap-1.5"
+          >
+            <i data-lucide="sliders" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span>Ajustes</span>
+          </button>
+
+          <!-- Botón Cerrar Sesión -->
           <button 
             id="logoutBtn"
-            class="text-xs font-medium text-slate-400 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 px-3 py-2 rounded-lg transition flex items-center gap-1.5"
+            class="text-xs font-medium text-slate-400 hover:text-rose-400 bg-slate-900 hover:bg-rose-950/40 border border-slate-800 hover:border-rose-900/40 px-3 py-2 rounded-xl transition flex items-center gap-1.5"
           >
             <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
-            <span>Cerrar Sesión</span>
+            <span>Salir</span>
           </button>
         </div>
       </div>
@@ -115,7 +140,7 @@
       <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="glass-card rounded-2xl p-5 border border-slate-800/80">
           <div class="flex items-center justify-between text-slate-400 mb-2">
-            <span class="text-xs font-semibold uppercase tracking-wider">Enlaces Creados</span>
+            <span class="text-xs font-semibold uppercase tracking-wider">Enlaces Activos</span>
             <i data-lucide="link" class="w-4 h-4 text-cyan-400"></i>
           </div>
           <div id="statTotalUrls" class="text-2xl font-bold text-white mono">0</div>
@@ -123,7 +148,7 @@
 
         <div class="glass-card rounded-2xl p-5 border border-slate-800/80">
           <div class="flex items-center justify-between text-slate-400 mb-2">
-            <span class="text-xs font-semibold uppercase tracking-wider">Escaneos / Clics Totales</span>
+            <span class="text-xs font-semibold uppercase tracking-wider">Escaneos Humanos</span>
             <i data-lucide="eye" class="w-4 h-4 text-emerald-400"></i>
           </div>
           <div id="statTotalVisits" class="text-2xl font-bold text-white mono">0</div>
@@ -134,12 +159,12 @@
             <span class="text-xs font-semibold uppercase tracking-wider">Dispositivo Principal</span>
             <i data-lucide="smartphone" class="w-4 h-4 text-blue-400"></i>
           </div>
-          <div id="statTopDevice" class="text-lg font-bold text-white">Móvil (85%)</div>
+          <div id="statTopDevice" class="text-base font-bold text-white">Móvil (Cargando...)</div>
         </div>
 
         <div class="glass-card rounded-2xl p-5 border border-slate-800/80">
           <div class="flex items-center justify-between text-slate-400 mb-2">
-            <span class="text-xs font-semibold uppercase tracking-wider">Enlace Más Escaneado</span>
+            <span class="text-xs font-semibold uppercase tracking-wider">QR Más Escaneado</span>
             <i data-lucide="flame" class="w-4 h-4 text-amber-400"></i>
           </div>
           <div id="statTopSlug" class="text-sm font-bold text-cyan-300 mono truncate">--</div>
@@ -148,22 +173,24 @@
 
       <!-- Panel de Creación y Estudio de QR -->
       <section class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <!-- Formulario Crear Enlace (7 cols) -->
-        <div class="lg:col-span-7 glass rounded-2xl p-6 sm:p-8 border border-slate-800">
+        
+        <!-- Formulario Crear Enlace con Opciones Opcionales (7 cols) -->
+        <div class="lg:col-span-7 glass rounded-3xl p-6 sm:p-8 border border-slate-800">
           <div class="flex items-center gap-3 mb-6">
             <div class="p-2.5 rounded-xl bg-cyan-950/80 border border-cyan-800/60 text-cyan-400">
               <i data-lucide="plus-circle" class="w-5 h-5"></i>
             </div>
             <div>
               <h2 class="text-lg font-bold text-white">Acortar Nueva URL</h2>
-              <p class="text-xs text-slate-400">Crea un enlace dinámico rastreable con código QR para impresión</p>
+              <p class="text-xs text-slate-400">Simple por defecto, o con configuraciones avanzadas si las necesitas</p>
             </div>
           </div>
 
           <form id="createForm" class="space-y-4">
+            <!-- Campos Base (Siempre visibles y simples) -->
             <div>
               <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                URL de Destino <span class="text-cyan-400">*</span>
+                URL de Destino Principal <span class="text-cyan-400">*</span>
               </label>
               <input 
                 type="url" 
@@ -172,14 +199,13 @@
                 placeholder="https://linktree.agrolara.dedyn.io/u/carlos-lara"
                 class="w-full px-4 py-3 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition text-sm mono"
               />
-              <p class="text-[11px] text-slate-500 mt-1">Pega aquí el enlace de tu Linktree Copia, WhatsApp, catálogo o web.</p>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <div class="flex items-center justify-between mb-1.5">
                   <label class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Slug Corto</label>
-                  <button type="button" id="randomSlugBtn" class="text-[11px] text-cyan-400 hover:text-cyan-300">Aleatorio</button>
+                  <button type="button" id="randomSlugBtn" class="text-[11px] text-cyan-400 hover:text-cyan-300 font-semibold">Generar Aleatorio</button>
                 </div>
                 <div class="relative">
                   <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 text-xs mono">/</span>
@@ -197,35 +223,138 @@
                 <input 
                   type="text" 
                   id="titleInput" 
-                  placeholder="Tarjeta Carlos Lara"
+                  placeholder="Tarjeta de Carlos"
                   class="w-full px-3 py-2.5 bg-slate-900/90 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition text-sm"
                 />
               </div>
             </div>
 
+            <!-- ACORDEÓN: OPCIONES AVANZADAS OPCIONALES -->
+            <div class="pt-2">
+              <button 
+                type="button" 
+                id="toggleAdvancedBtn"
+                class="w-full py-2.5 px-4 bg-slate-900/80 hover:bg-slate-900 border border-slate-800 rounded-xl text-xs font-semibold text-slate-300 flex items-center justify-between transition"
+              >
+                <span class="flex items-center gap-2">
+                  <i data-lucide="sliders-horizontal" class="w-4 h-4 text-cyan-400"></i>
+                  <span>Opciones Avanzadas (Opcionales: Smart OS, Clave, Límites, Webhooks, UTM)</span>
+                </span>
+                <i data-lucide="chevron-down" id="advancedIcon" class="w-4 h-4 text-slate-400 transition-transform"></i>
+              </button>
+
+              <div id="advancedContainer" class="hidden mt-4 space-y-4 p-4 bg-slate-950/60 rounded-2xl border border-slate-800/80">
+                
+                <!-- 1. Smart OS Routing -->
+                <div class="space-y-2">
+                  <span class="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                    <i data-lucide="smartphone" class="w-3.5 h-3.5"></i>
+                    <span>Redirección Inteligente por Celular (Opcional)</span>
+                  </span>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label class="block text-[11px] text-slate-400 mb-1">Destino si es iPhone (iOS)</label>
+                      <input type="url" id="iosUrlInput" placeholder="https://apps.apple.com/..." class="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs mono">
+                    </div>
+                    <div>
+                      <label class="block text-[11px] text-slate-400 mb-1">Destino si es Android</label>
+                      <input type="url" id="androidUrlInput" placeholder="https://play.google.com/..." class="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs mono">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 2. Vencimiento y Límites -->
+                <div class="space-y-2 pt-2 border-t border-slate-800/60">
+                  <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                    <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                    <span>Vencimiento y Límite de Escaneos (Opcional)</span>
+                  </span>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label class="block text-[11px] text-slate-400 mb-1">Fecha Límite</label>
+                      <input type="datetime-local" id="expiresAtInput" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs">
+                    </div>
+                    <div>
+                      <label class="block text-[11px] text-slate-400 mb-1">Máximo de Clics</label>
+                      <input type="number" id="maxVisitsInput" min="1" placeholder="Ej: 50" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs">
+                    </div>
+                    <div>
+                      <label class="block text-[11px] text-slate-400 mb-1">URL si caduca (Fallback)</label>
+                      <input type="url" id="fallbackUrlInput" placeholder="https://..." class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs mono">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 3. Contraseña y Webhook -->
+                <div class="space-y-2 pt-2 border-t border-slate-800/60">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <span class="text-xs font-bold text-amber-400 flex items-center gap-1.5 mb-1">
+                        <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+                        <span>Proteger con Contraseña</span>
+                      </span>
+                      <input type="password" id="linkPasswordInput" placeholder="Dejar en blanco si es público" class="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs mono">
+                    </div>
+                    <div>
+                      <span class="text-xs font-bold text-purple-400 flex items-center gap-1.5 mb-1">
+                        <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+                        <span>Webhook de Alerta (WhatsApp / Bot)</span>
+                      </span>
+                      <input type="url" id="webhookUrlInput" placeholder="https://mi-bot-whatsapp/alerta" class="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs mono">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 4. UTM Marketing y Color del QR -->
+                <div class="space-y-2 pt-2 border-t border-slate-800/60">
+                  <span class="text-xs font-bold text-blue-400 flex items-center gap-1.5">
+                    <i data-lucide="palette" class="w-3.5 h-3.5"></i>
+                    <span>Parámetros UTM de Marketing y Colores del QR</span>
+                  </span>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input type="text" id="utmSourceInput" placeholder="utm_source (ej: tarjeta)" class="px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs">
+                    <input type="text" id="utmMediumInput" placeholder="utm_medium (ej: qr_fisico)" class="px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs">
+                    <input type="text" id="utmCampaignInput" placeholder="utm_campaign (ej: networking)" class="px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs">
+                  </div>
+                  <div class="flex items-center gap-4 pt-1">
+                    <label class="text-[11px] text-slate-400 flex items-center gap-2">
+                      <span>Color del QR:</span>
+                      <input type="color" id="qrColorDarkInput" value="#0f172a" class="w-6 h-6 bg-transparent border-0 cursor-pointer rounded">
+                    </label>
+                    <label class="text-[11px] text-slate-400 flex items-center gap-2">
+                      <span>Color de Fondo:</span>
+                      <input type="color" id="qrColorLightInput" value="#ffffff" class="w-6 h-6 bg-transparent border-0 cursor-pointer rounded">
+                    </label>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Botón Principal -->
             <button 
               type="submit" 
               id="submitCreateBtn"
               class="w-full mt-2 py-3.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl shadow-lg shadow-cyan-500/20 transition flex items-center justify-center gap-2"
             >
               <i data-lucide="sparkles" class="w-4 h-4"></i>
-              <span>Acortar y Generar QR Dinámico</span>
+              <span>Acortar y Generar Código QR</span>
             </button>
           </form>
         </div>
 
         <!-- Estudio QR para Impresión (5 cols) -->
-        <div class="lg:col-span-5 glass rounded-2xl p-6 sm:p-8 border border-slate-800 text-center flex flex-col items-center">
+        <div class="lg:col-span-5 glass rounded-3xl p-6 sm:p-8 border border-slate-800 text-center flex flex-col items-center">
           <div class="w-full flex items-center justify-between mb-4 text-left">
             <div>
               <h3 class="text-sm font-bold text-white uppercase tracking-wider">Estudio de Código QR</h3>
-              <p class="text-xs text-slate-400">Optimizado para imprenta y tarjetas físicas</p>
+              <p class="text-xs text-slate-400">Optimizado para imprenta, folletos y tarjetas físicas</p>
             </div>
             <span class="text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800/60 px-2 py-0.5 rounded-full">QR Dinámico</span>
           </div>
 
           <!-- Contenedor del QR -->
-          <div class="p-4 bg-white rounded-2xl shadow-xl shadow-slate-950/50 mb-4 transition-transform hover:scale-105">
+          <div id="qrPreviewWrapper" class="p-4 bg-white rounded-2xl shadow-xl shadow-slate-950/50 mb-4 transition-transform hover:scale-105">
             <img id="qrPreviewImg" src="" alt="Código QR Dinámico" class="w-48 h-48 object-contain">
           </div>
 
@@ -263,18 +392,18 @@
               </a>
             </div>
             <p class="text-[11px] text-slate-500">
-              💡 <b>Tip de Impresión:</b> Descarga en <b>SVG</b> para plotter o imprentas (resolución infinita).
+              💡 <b>Tip Imprenta:</b> El formato <b>SVG</b> tiene resolución infinita para imprimir en gigantografías o ploteos.
             </p>
           </div>
         </div>
       </section>
 
       <!-- Tabla de Enlaces Creados y Edición Dinámica -->
-      <section class="glass rounded-2xl p-6 sm:p-8 border border-slate-800 space-y-6">
+      <section class="glass rounded-3xl p-6 sm:p-8 border border-slate-800 space-y-6">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h2 class="text-lg font-bold text-white">Todos tus Enlaces Activos</h2>
-            <p class="text-xs text-slate-400">Puedes cambiar la URL de destino de cualquier QR impreso en cualquier momento</p>
+            <p class="text-xs text-slate-400">Modifica cualquier destino, clave o fecha sin cambiar el código QR impreso</p>
           </div>
           
           <div class="relative w-full sm:w-64">
@@ -296,8 +425,8 @@
             <thead class="text-[11px] uppercase tracking-wider text-slate-400 bg-slate-900/80 border-b border-slate-800">
               <tr>
                 <th class="py-3 px-4">Enlace Corto</th>
-                <th class="py-3 px-4">Nombre / Etiqueta</th>
-                <th class="py-3 px-4">Destino Actual (QR Dinámico)</th>
+                <th class="py-3 px-4">Nombre / Configuración</th>
+                <th class="py-3 px-4">Destino Actual</th>
                 <th class="py-3 px-4 text-center">Escaneos</th>
                 <th class="py-3 px-4 text-right">Acciones</th>
               </tr>
@@ -313,14 +442,14 @@
   </div>
 
   <!-- ========================================== -->
-  <!-- MODAL: EDITAR DESTINO EN CALIENTE         -->
+  <!-- MODAL: EDITAR ENLACE EN CALIENTE          -->
   <!-- ========================================== -->
-  <div id="editModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-    <div class="glass max-w-lg w-full rounded-2xl p-6 border border-cyan-500/30 shadow-2xl">
+  <div id="editModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
+    <div class="glass max-w-xl w-full rounded-3xl p-6 sm:p-8 border border-cyan-500/30 shadow-2xl my-8">
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <i data-lucide="edit-3" class="w-4 h-4 text-cyan-400"></i>
-          <span>Modificar Destino de QR Dinámico</span>
+          <span>Modificar Destino y Reglas del QR Dinámico</span>
         </h3>
         <button id="closeEditModalBtn" class="text-slate-400 hover:text-white">
           <i data-lucide="x" class="w-4 h-4"></i>
@@ -328,26 +457,114 @@
       </div>
 
       <p class="text-xs text-slate-400 mb-4">
-        Cambiar la URL redirigirá inmediatamente a todos los que escaneen el código QR físico ya impreso.
+        Los cambios tendrán efecto inmediato para quien escanee el código QR impreso.
       </p>
 
       <form id="editForm" class="space-y-4">
         <input type="hidden" id="editIdInput">
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nombre</label>
-          <input type="text" id="editTitleInput" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nombre</label>
+            <input type="text" id="editTitleInput" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">URL Principal</label>
+            <input type="url" id="editLongUrlInput" required class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs mono">
+          </div>
         </div>
 
-        <div>
-          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">Nueva URL de Destino</label>
-          <input type="url" id="editLongUrlInput" required class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs mono">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-cyan-400 mb-1">Destino iPhone (iOS)</label>
+            <input type="url" id="editIosUrlInput" placeholder="Opcional" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs mono">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-cyan-400 mb-1">Destino Android</label>
+            <input type="url" id="editAndroidUrlInput" placeholder="Opcional" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs mono">
+          </div>
         </div>
 
-        <div class="flex justify-end gap-2 pt-2">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Fecha de Expiración</label>
+            <input type="datetime-local" id="editExpiresAtInput" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Máximo de Clics</label>
+            <input type="number" id="editMaxVisitsInput" min="1" placeholder="Ilimitado" class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">URL Fallback</label>
+            <input type="url" id="editFallbackUrlInput" placeholder="Si caduca..." class="w-full px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs mono">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-amber-400 mb-1">Contraseña del Enlace</label>
+            <input type="password" id="editLinkPasswordInput" placeholder="Dejar en blanco si es público" class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs mono">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-purple-400 mb-1">Webhook de Alerta (WhatsApp / Bot)</label>
+            <input type="url" id="editWebhookUrlInput" placeholder="https://..." class="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs mono">
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
           <button type="button" id="cancelEditModalBtn" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold">Cancelar</button>
           <button type="submit" class="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5">
             <i data-lucide="check" class="w-3.5 h-3.5"></i>
-            <span>Guardar Nuevo Destino</span>
+            <span>Guardar Cambios</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: AJUSTES GLOBALES                   -->
+  <!-- ========================================== -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+    <div class="glass max-w-md w-full rounded-3xl p-6 border border-slate-800 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="sliders" class="w-4 h-4 text-amber-400"></i>
+          <span>Configuración Global</span>
+        </h3>
+        <button id="closeSettingsModalBtn" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <form id="settingsForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
+            Webhook Global de Alertas (WhatsApp / Telegram / Bot)
+          </label>
+          <input 
+            type="url" 
+            id="globalWebhookInput" 
+            placeholder="https://mi-webhook-whatsapp.com/notificar"
+            class="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs mono"
+          >
+          <p class="text-[11px] text-slate-500 mt-1">
+            Se disparará en segundo plano cada vez que cualquier enlace o código QR de tu cuenta sea escaneado.
+          </p>
+        </div>
+
+        <div class="pt-2">
+          <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+            <input type="checkbox" id="filterBotsCheckbox" checked class="w-4 h-4 rounded text-cyan-500 focus:ring-0 bg-slate-900 border-slate-700">
+            <span>Filtrar bots automáticos de redes sociales (Métricas 100% humanas)</span>
+          </label>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
+          <button type="button" id="cancelSettingsModalBtn" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5">
+            <i data-lucide="check" class="w-3.5 h-3.5"></i>
+            <span>Guardar Ajustes</span>
           </button>
         </div>
       </form>
