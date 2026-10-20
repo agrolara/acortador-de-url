@@ -16,6 +16,7 @@ COPY . .
 
 # Directorio de datos persistente para SQLite
 RUN mkdir -p /app/data
+VOLUME ["/app/data"]
 
 # Variables de entorno por defecto
 ENV NODE_ENV=production
