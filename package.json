@@ -1,0 +1,26 @@
+{
+  "name": "acortador-de-url",
+  "version": "1.0.0",
+  "description": "Plataforma Acortadora de URLs y Generador de Códigos QR Dinámicos para Impresión con Motor Shlink Compatible",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "url-shortener",
+    "shlink",
+    "qr-code",
+    "dynamic-qr",
+    "linktree"
+  ],
+  "author": "agrolara",
+  "license": "MIT",
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4"
+  }
+}
