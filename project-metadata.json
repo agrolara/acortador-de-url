@@ -1,0 +1,41 @@
+{
+  "id": "shlink-acortador-qr",
+  "title": "Shlink Acortador & Motor QR Dinámico",
+  "shortName": "Acortador QR",
+  "description": "Plataforma de acortamiento de URLs de alto rendimiento, enrutamiento condicional inteligente (iOS/Android/Desktop) y generación de códigos QR vectoriales (SVG) y raster HD (PNG 1024px) para imprenta física con motor compatible con Shlink API v3.",
+  "longDescription": "Shlink Acortador & Motor QR Dinámico es una solución de infraestructura web concebida para cerrar la brecha entre el marketing físico (tarjetas de presentación, folletería, eventos, rotulación vehicular) y la analítica digital. Su núcleo incorpora redirecciones 302 de ultra-baja latencia sobre Node.js 22 LTS y SQLite nativo en modo WAL, ofreciendo compatibilidad total con la API REST v3 de Shlink (/rest/v3/short-urls) para integrarse sin fricción con sistemas externos como Linktree Digital y suites de automatización.\n\nLa plataforma integra un generador nativo de códigos QR en dos vertientes: PNG Ultra-HD (1024x1024 px con corrección de error nivel H) para visualización digital y SVG vectorial puro sin pérdida de resolución para imprentas industriales y corte láser. Destaca su capacidad de 'edición en caliente': permite reconfigurar la URL de destino de material ya impreso sin reimprimir. Además, ofrece enrutamiento condicional por dispositivo (iOS / Android / Desktop), protección de enlaces por contraseña cifrada con HMAC SHA-256, expiración por fecha o límite de escaneos, inyección dinámica de etiquetas UTM y disparo de Webhooks en tiempo real con filtro inteligente anti-bots.",
+  "category": "Backend / Infraestructura & SaaS",
+  "featured": true,
+  "status": "production",
+  "releaseDate": "2026-10-20",
+  "technologies": [
+    "Node.js 22",
+    "Express",
+    "SQLite (WAL)",
+    "Tailwind CSS",
+    "JavaScript ESModules",
+    "QRCode Engine",
+    "Shlink API v3",
+    "Docker",
+    "Coolify",
+    "REST API"
+  ],
+  "githubUrl": "https://github.com/agrolara/acortador-de-url",
+  "liveUrl": "https://urlshort.agrolara.dedyn.io",
+  "specs": {
+    "Arquitectura": "Microservicio Fullstack Express + SQLite WAL Nativo",
+    "Compatibilidad": "API REST Shlink v3 (/rest/v3/short-urls) con API Key",
+    "Motor QR Físico": "Exportación dual SVG Vectorial + PNG HD 1024px (Nivel H)",
+    "Smart Routing": "Redirección condicional según OS (iOS, Android, Desktop)",
+    "Seguridad & Cifrado": "HMAC SHA-256, Cookies HTTP-Only y Links con Password",
+    "Analítica & Telemetría": "Contador de escaneos, desglose por SO/dispositivo y filtro anti-bot",
+    "Automatización": "Webhooks en tiempo real y exportación de datos en CSV/JSON",
+    "Despliegue & Red": "Docker Alpine en Oracle Cloud ARM64 con Coolify y SSL Let's Encrypt"
+  },
+  "metrics": {
+    "latency": "<15ms",
+    "qrFormats": ["PNG 1024px Level H", "SVG Vectorial"],
+    "redirectStatus": "302 Found",
+    "database": "Embedded SQLite WAL (Zero external network hops)"
+  }
+}
