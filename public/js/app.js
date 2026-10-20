@@ -237,6 +237,9 @@ function setupEventListeners() {
       showToast('Error de conexión', 'error');
     }
   });
+
+  // Inicializar Estudio de Cartel para Mostrador
+  setupStandeeDesigner();
 }
 
 // -------------------------------------------------------------
@@ -384,12 +387,22 @@ function selectActiveUrl(url) {
   svgBtn.href = url.qr_svg_url;
   svgBtn.download = `qr-${url.slug}.svg`;
 
+  // Actualizar también inmediatamente el código QR en el Cartel de Mostrador (Standee)
+  const standeeQr = document.getElementById('standeeQrImg');
+  const standeeSlugBadge = document.getElementById('standeeSelectedSlugBadge');
+  if (standeeQr) standeeQr.src = url.qr_png_url;
+  if (standeeSlugBadge) standeeSlugBadge.textContent = `/${url.slug}`;
+
   refreshIcons();
 }
 
 function renderEmptyQr() {
   document.getElementById('qrShortUrlText').textContent = 'Crea un enlace para generar el QR';
-  document.getElementById('qrPreviewImg').src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="1.5"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h.01M7 12h.01M7 17h.01M12 7h.01M12 12h.01M17 7h.01M17 12h.01M17 17h.01"/></svg>';
+  const placeholder = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="1.5"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h.01M7 12h.01M7 17h.01M12 7h.01M12 12h.01M17 7h.01M17 12h.01M17 17h.01"/></svg>';
+  const qrImg = document.getElementById('qrPreviewImg');
+  const standeeQr = document.getElementById('standeeQrImg');
+  if (qrImg) qrImg.src = placeholder;
+  if (standeeQr) standeeQr.src = placeholder;
 }
 
 window.selectUrlById = function(id) {
@@ -509,3 +522,170 @@ function escapeHtml(string) {
   };
   return String(string).replace(/[&<>"'\/]/g, (s) => entityMap[s]);
 }
+
+// -------------------------------------------------------------
+// ESTUDIO DISEÑADOR DE CARTEL PARA MOSTRADOR & PLACA NFC / QR
+// -------------------------------------------------------------
+function setupStandeeDesigner() {
+  // Título Línea 1 y Línea 2
+  const t1 = document.getElementById('standeeTitleL1');
+  const t2 = document.getElementById('standeeTitleL2');
+  const p1 = document.getElementById('previewTitleL1');
+  const p2 = document.getElementById('previewTitleL2');
+  if (t1 && p1) t1.addEventListener('input', () => p1.textContent = t1.value.trim() || 'CONÉCTATE');
+  if (t2 && p2) t2.addEventListener('input', () => p2.textContent = t2.value.trim() || 'CON NOSOTROS');
+
+  // Subtítulo / Módulo Catálogo & Servicios
+  const catText = document.getElementById('standeeCatalogText');
+  const catToggle = document.getElementById('showCatalogToggle');
+  const pCatText = document.getElementById('previewCatalogText');
+  const pCatWrap = document.getElementById('previewCatalogContainer');
+  if (catText && pCatText) catText.addEventListener('input', () => pCatText.textContent = catText.value.trim() || 'Catálogo & Servicios');
+  if (catToggle && pCatWrap) catToggle.addEventListener('change', () => pCatWrap.classList.toggle('hidden', !catToggle.checked));
+
+  // Texto bajo el QR
+  const qrLbl = document.getElementById('standeeQrLabel');
+  const pQrLbl = document.getElementById('previewQrLabel');
+  if (qrLbl && pQrLbl) qrLbl.addEventListener('input', () => pQrLbl.textContent = qrLbl.value.trim() || 'Escanea aquí');
+
+  // Módulo NFC
+  const nfcToggle = document.getElementById('showNfcToggle');
+  const nfcLbl = document.getElementById('standeeNfcLabel');
+  const pNfcWrap = document.getElementById('previewNfcContainer');
+  const pNfcLbl = document.getElementById('previewNfcLabel');
+  if (nfcToggle && pNfcWrap) nfcToggle.addEventListener('change', () => pNfcWrap.classList.toggle('hidden', !nfcToggle.checked));
+  if (nfcLbl && pNfcLbl) nfcLbl.addEventListener('input', () => pNfcLbl.textContent = nfcLbl.value.trim() || 'Toca con tu móvil (NFC)');
+
+  // Módulo Google Reviews
+  const gToggle = document.getElementById('showGoogleToggle');
+  const gLbl = document.getElementById('standeeGoogleText');
+  const pGWrap = document.getElementById('previewGoogleBlock');
+  const pGLbl = document.getElementById('previewGoogleText');
+  if (gToggle && pGWrap) gToggle.addEventListener('change', () => pGWrap.classList.toggle('hidden', !gToggle.checked));
+  if (gLbl && pGLbl) gLbl.addEventListener('input', () => pGLbl.textContent = gLbl.value.trim() || 'Valóranos en Google');
+
+  // Canales Sociales y Web (Instagram, TikTok, WhatsApp, Web, Facebook, LinkedIn)
+  const socials = [
+    { toggle: 'showInstagram', input: 'textInstagram', wrap: 'iconWrapInstagram', label: 'labelInstagram' },
+    { toggle: 'showTiktok', input: 'textTiktok', wrap: 'iconWrapTiktok', label: 'labelTiktok' },
+    { toggle: 'showWhatsapp', input: 'textWhatsapp', wrap: 'iconWrapWhatsapp', label: 'labelWhatsapp' },
+    { toggle: 'showWebsite', input: 'textWebsite', wrap: 'iconWrapWebsite', label: 'labelWebsite' },
+    { toggle: 'showFacebook', input: 'textFacebook', wrap: 'iconWrapFacebook', label: 'labelFacebook' },
+    { toggle: 'showLinkedin', input: 'textLinkedin', wrap: 'iconWrapLinkedin', label: 'labelLinkedin' }
+  ];
+
+  socials.forEach(s => {
+    const tog = document.getElementById(s.toggle);
+    const inp = document.getElementById(s.input);
+    const wrap = document.getElementById(s.wrap);
+    const lbl = document.getElementById(s.label);
+
+    if (tog && wrap) tog.addEventListener('change', () => wrap.classList.toggle('hidden', !tog.checked));
+    if (inp && lbl) inp.addEventListener('input', () => lbl.textContent = inp.value.trim() || 'Síguenos');
+  });
+
+  // Selector Libre de Color de Fondo
+  const customBg = document.getElementById('standeeBgCustom');
+  if (customBg) {
+    customBg.addEventListener('input', () => {
+      const standee = document.getElementById('printableStandee');
+      if (standee) standee.style.background = customBg.value;
+    });
+  }
+
+  // Aura de Resplandor Neón
+  const auraSelect = document.getElementById('standeeAuraColor');
+  if (auraSelect) {
+    auraSelect.addEventListener('change', () => {
+      const standee = document.getElementById('printableStandee');
+      if (!standee) return;
+      const val = auraSelect.value;
+      if (val === 'emerald-cyan') {
+        standee.style.borderColor = 'rgba(52, 211, 153, 0.6)';
+        standee.style.boxShadow = '0 0 35px rgba(52, 211, 153, 0.3), inset 0 0 25px rgba(6, 182, 212, 0.2)';
+      } else if (val === 'amber-orange') {
+        standee.style.borderColor = 'rgba(251, 191, 36, 0.6)';
+        standee.style.boxShadow = '0 0 35px rgba(251, 191, 36, 0.3), inset 0 0 25px rgba(249, 115, 22, 0.2)';
+      } else if (val === 'purple-pink') {
+        standee.style.borderColor = 'rgba(168, 85, 247, 0.6)';
+        standee.style.boxShadow = '0 0 35px rgba(168, 85, 247, 0.3), inset 0 0 25px rgba(236, 72, 153, 0.2)';
+      } else {
+        standee.style.borderColor = 'rgba(0, 240, 255, 0.4)';
+        standee.style.boxShadow = '0 0 35px rgba(0, 240, 255, 0.25), inset 0 0 25px rgba(217, 70, 239, 0.15)';
+      }
+    });
+  }
+
+  // Descarga en Alta Resolución (PNG 300 DPI con html2canvas)
+  const downloadPngBtn = document.getElementById('downloadStandeePngBtn');
+  if (downloadPngBtn) {
+    downloadPngBtn.addEventListener('click', async () => {
+      const standee = document.getElementById('printableStandee');
+      if (!standee) return;
+
+      showToast('Generando cartel en ultra alta definición (PNG)...', 'info');
+
+      try {
+        const canvas = await html2canvas(standee, {
+          scale: 3, // Multiplicador 3x para calidad óptima de impresión física
+          useCORS: true,
+          backgroundColor: null,
+          logging: false
+        });
+
+        const slug = activeUrl ? activeUrl.slug : 'mostrador';
+        const link = document.createElement('a');
+        link.download = `cartel-mostrador-${slug}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        showToast('¡Cartel HD descargado con éxito!', 'success');
+      } catch (err) {
+        console.error('Error al generar imagen de cartel:', err);
+        showToast('Error al exportar cartel en imagen', 'error');
+      }
+    });
+  }
+
+  // Imprimir Directamente / Guardar en PDF
+  const printBtn = document.getElementById('printStandeeBtn');
+  if (printBtn) {
+    printBtn.addEventListener('click', () => {
+      window.print();
+    });
+  }
+}
+
+window.setStandeeTheme = function(theme) {
+  const standee = document.getElementById('printableStandee');
+  const t1 = document.getElementById('previewTitleL1');
+  const t2 = document.getElementById('previewTitleL2');
+  if (!standee) return;
+
+  if (theme === 'oled') {
+    standee.style.background = '#000000';
+    standee.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+    standee.style.boxShadow = '0 0 30px rgba(255, 255, 255, 0.1)';
+    if (t1) { t1.classList.remove('standee-neon-text'); t1.style.color = '#ffffff'; }
+    if (t2) { t2.classList.remove('standee-neon-text'); t2.style.color = '#ffffff'; }
+  } else if (theme === 'midnight') {
+    standee.style.background = 'linear-gradient(180deg, #070e24 0%, #0c1a40 50%, #08122d 100%)';
+    standee.style.borderColor = 'rgba(56, 189, 248, 0.5)';
+    standee.style.boxShadow = '0 0 35px rgba(56, 189, 248, 0.3)';
+    if (t1) { t1.classList.add('standee-neon-text'); t1.style.color = '#ffffff'; }
+    if (t2) { t2.classList.add('standee-neon-text'); t2.style.color = '#ffffff'; }
+  } else if (theme === 'white') {
+    standee.style.background = '#ffffff';
+    standee.style.borderColor = 'rgba(6, 182, 212, 0.6)';
+    standee.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.12)';
+    if (t1) { t1.classList.remove('standee-neon-text'); t1.style.color = '#0f172a'; }
+    if (t2) { t2.classList.remove('standee-neon-text'); t2.style.color = '#0f172a'; }
+  } else {
+    // Cyberpunk Neon Original
+    standee.style.background = 'linear-gradient(180deg, #090518 0%, #0d0c2b 55%, #160729 100%)';
+    standee.style.borderColor = 'rgba(0, 240, 255, 0.4)';
+    standee.style.boxShadow = '0 0 35px rgba(0, 240, 255, 0.25), inset 0 0 25px rgba(217, 70, 239, 0.15)';
+    if (t1) { t1.classList.add('standee-neon-text'); t1.style.color = '#ffffff'; }
+    if (t2) { t2.classList.add('standee-neon-text'); t2.style.color = '#ffffff'; }
+  }
+};
+
