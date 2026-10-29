@@ -1194,16 +1194,16 @@
       <form id="settingsForm" class="space-y-4">
         <div>
           <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1">
-            Webhook Global de Alertas (WhatsApp / Telegram / Bot)
+            Webhook Global de Alertas (Telegram / WhatsApp / Discord / Make)
           </label>
           <input 
             type="url" 
             id="globalWebhookInput" 
-            placeholder="https://mi-webhook-whatsapp.com/notificar"
+            placeholder="https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<ID>"
             class="w-full px-3 py-2.5 bg-slate-900 border border-slate-700 rounded-xl text-white text-xs mono"
           >
           <p class="text-[11px] text-slate-500 mt-1">
-            Se disparará en segundo plano cada vez que cualquier enlace o código QR de tu cuenta sea escaneado.
+            Soporta directamente Telegram Bot (<code>https://api.telegram.org/botTOKEN/sendMessage?chat_id=ID</code>), Discord o Make/WhatsApp.
           </p>
         </div>
 

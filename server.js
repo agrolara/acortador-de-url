@@ -405,14 +405,66 @@ async function resolveIpLocationAsync(visitId, ip, webhookUrl, record, meta) {
   }
 }
 
-// Helper para disparar Webhook asíncrono
+// Helper para disparar Webhook asíncrono (con soporte nativo para Telegram y Discord)
 async function dispatchWebhook(url, payload) {
   if (!url) return;
   try {
-    await fetch(url, {
+    let targetUrl = url;
+    let body = JSON.stringify(payload);
+    let headers = { 'Content-Type': 'application/json', 'User-Agent': 'Shlink-Acortador-Webhook/1.0' };
+
+    // 1. Soporte Nativo Directo para Telegram Bot:
+    // Formato: https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>
+    if (url.includes('api.telegram.org')) {
+      let chatId = null;
+      try {
+        const urlObj = new URL(url);
+        chatId = urlObj.searchParams.get('chat_id');
+      } catch {}
+
+      if (chatId) {
+        const loc = payload.location ? `${payload.location.flag || '📍'} ${payload.location.city || 'Desconocida'}, ${payload.location.country || ''}` : 'Ubicación no disponible';
+        const isp = payload.network ? (payload.network.isp || payload.network.org || 'Red Móvil / Hogar') : 'No detectado';
+        let cliTag = '';
+        if (payload.query_params && Object.keys(payload.query_params).length > 0) {
+          const params = Object.entries(payload.query_params).map(([k, v]) => `• <b>${k}:</b> ${v}`).join('\n');
+          cliTag = `\n👤 <b>Parámetros / Cliente:</b>\n${params}`;
+        }
+
+        const msgText = `🔔 <b>¡Nuevo Escaneo de Código QR!</b>\n\n` +
+          `📌 <b>Enlace:</b> <code>/${payload.slug}</code> (${payload.title || 'QR Activo'})\n` +
+          `📍 <b>Ubicación:</b> ${loc}\n` +
+          `🏢 <b>Operador:</b> ${isp}\n` +
+          `📱 <b>Dispositivo:</b> ${payload.device_type} • ${payload.os} (${payload.browser})\n` +
+          `🔗 <b>Canal:</b> ${payload.referer || 'Directo / QR Físico'}` +
+          cliTag + `\n\n` +
+          `📊 <b>Escaneos totales:</b> #${payload.total_scans || 1}\n` +
+          `⏰ <b>Hora:</b> ${new Date().toLocaleTimeString('es-CL', { timeZone: 'America/Santiago' })}`;
+
+        body = JSON.stringify({
+          chat_id: chatId,
+          text: msgText,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true
+        });
+      }
+    }
+
+    // 2. Soporte Nativo para Webhooks de Discord:
+    if (url.includes('discord.com/api/webhooks')) {
+      const loc = payload.location ? `${payload.location.flag || '📍'} ${payload.location.city || ''}, ${payload.location.country || ''}` : 'Ubicación';
+      const msgText = `🔔 **¡Nuevo Escaneo de Código QR!**\n` +
+        `📌 **Enlace:** \`/${payload.slug}\` (${payload.title || 'QR'})\n` +
+        `📍 **Ubicación:** ${loc}\n` +
+        `📱 **Dispositivo:** ${payload.device_type} (${payload.os} • ${payload.browser})\n` +
+        `📊 **Total escaneos:** #${payload.total_scans || 1}`;
+      body = JSON.stringify({ content: msgText });
+    }
+
+    await fetch(targetUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Shlink-Acortador-Webhook/1.0' },
-      body: JSON.stringify(payload),
+      headers: headers,
+      body: body,
       signal: AbortSignal.timeout(5000)
     });
   } catch (err) {
