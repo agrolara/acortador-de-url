@@ -12,6 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Agro1280@';
 const BASE_URL = process.env.BASE_URL || 'https://urlshort.agrolara.dedyn.io';
@@ -51,7 +52,33 @@ db.exec(`
     os TEXT,
     browser TEXT,
     referer TEXT,
-    is_bot INTEGER DEFAULT 0
+    is_bot INTEGER DEFAULT 0,
+    ip_address TEXT,
+    country_code TEXT,
+    country_name TEXT,
+    region_name TEXT,
+    city_name TEXT,
+    latitude REAL,
+    longitude REAL,
+    timezone TEXT,
+    isp TEXT,
+    org TEXT,
+    user_language TEXT,
+    query_params TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS ip_cache (
+    ip TEXT PRIMARY KEY,
+    country_code TEXT,
+    country_name TEXT,
+    region_name TEXT,
+    city_name TEXT,
+    latitude REAL,
+    longitude REAL,
+    timezone TEXT,
+    isp TEXT,
+    org TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS settings (
@@ -95,12 +122,56 @@ function runMigrations() {
     }
   }
 
-  // Verificar columna is_bot en visits
+  // Migración para visits: asegurar que todas las columnas de analítica enriquecida existan
   const visitCols = db.prepare("PRAGMA table_info(visits)").all().map(c => c.name);
-  if (!visitCols.includes('is_bot')) {
-    try {
-      db.exec("ALTER TABLE visits ADD COLUMN is_bot INTEGER DEFAULT 0");
-    } catch {}
+  const newVisitCols = [
+    { name: 'is_bot', type: 'INTEGER DEFAULT 0' },
+    { name: 'ip_address', type: 'TEXT' },
+    { name: 'country_code', type: 'TEXT' },
+    { name: 'country_name', type: 'TEXT' },
+    { name: 'region_name', type: 'TEXT' },
+    { name: 'city_name', type: 'TEXT' },
+    { name: 'latitude', type: 'REAL' },
+    { name: 'longitude', type: 'REAL' },
+    { name: 'timezone', type: 'TEXT' },
+    { name: 'isp', type: 'TEXT' },
+    { name: 'org', type: 'TEXT' },
+    { name: 'user_language', type: 'TEXT' },
+    { name: 'query_params', type: 'TEXT' }
+  ];
+
+  for (const col of newVisitCols) {
+    if (!visitCols.includes(col.name)) {
+      try {
+        db.exec(`ALTER TABLE visits ADD COLUMN ${col.name} ${col.type}`);
+        console.log(`✅ Migración ejecutada: Columna ${col.name} agregada a visits`);
+      } catch (e) {
+        console.error(`Error agregando columna ${col.name} a visits:`, e.message);
+      }
+    }
+  }
+
+  // Asegurar tabla ip_cache e índices de analítica
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS ip_cache (
+        ip TEXT PRIMARY KEY,
+        country_code TEXT,
+        country_name TEXT,
+        region_name TEXT,
+        city_name TEXT,
+        latitude REAL,
+        longitude REAL,
+        timezone TEXT,
+        isp TEXT,
+        org TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_visits_visited_at ON visits(visited_at);
+      CREATE INDEX IF NOT EXISTS idx_visits_ip ON visits(ip_address);
+    `);
+  } catch (ie) {
+    console.error('Error configurando índices de analítica:', ie.message);
   }
 }
 runMigrations();
@@ -158,7 +229,7 @@ function requireAdmin(req, res, next) {
   return res.status(401).json({ error: 'No autorizado. Se requiere clave de superadministrador.' });
 }
 
-// Detector de Dispositivo, SO y Filtro Anti-Bot
+// Detector de Dispositivo, SO, Navegadores In-App y Filtro Anti-Bot
 function parseUserAgent(ua = '') {
   const lower = ua.toLowerCase();
   let deviceType = 'Desktop';
@@ -167,24 +238,171 @@ function parseUserAgent(ua = '') {
 
   const isBot = /bot|crawler|spider|facebookexternalhit|whatsapp|telegrambot|twitterbot|slackbot|discordbot|applebot|bingbot|googlebot/i.test(lower);
 
-  if (/mobile|iphone|ipod|android.*mobile|windows phone|blackberry/i.test(lower)) {
-    deviceType = 'Móvil';
-  } else if (/ipad|tablet|android(?!.*mobile)/i.test(lower)) {
+  // Tipo de Dispositivo
+  if (/ipad/i.test(lower)) {
     deviceType = 'Tablet';
+  } else if (/tablet|android(?!.*mobile)/i.test(lower)) {
+    deviceType = 'Tablet';
+  } else if (/mobile|iphone|ipod|android.*mobile|windows phone|blackberry/i.test(lower)) {
+    deviceType = 'Móvil';
   }
 
+  // Sistema Operativo
   if (/iphone|ipad|ipod/i.test(lower)) os = 'iOS';
   else if (/android/i.test(lower)) os = 'Android';
   else if (/windows/i.test(lower)) os = 'Windows';
   else if (/macintosh|mac os x/i.test(lower)) os = 'macOS';
+  else if (/cros/i.test(lower)) os = 'ChromeOS';
   else if (/linux/i.test(lower)) os = 'Linux';
 
-  if (/edg\//i.test(lower)) browser = 'Edge';
+  // Navegador Web e In-App Browsers de Redes Sociales
+  if (/whatsapp/i.test(lower)) browser = 'WhatsApp (In-App)';
+  else if (/instagram/i.test(lower)) browser = 'Instagram (In-App)';
+  else if (/fb_iab|fban|fbav/i.test(lower)) browser = 'Facebook (In-App)';
+  else if (/tiktok/i.test(lower)) browser = 'TikTok (In-App)';
+  else if (/samsungbrowser/i.test(lower)) browser = 'Samsung Internet';
+  else if (/edg\//i.test(lower)) browser = 'Edge';
+  else if (/opr\/|opera/i.test(lower)) browser = 'Opera';
   else if (/chrome|crios/i.test(lower)) browser = 'Chrome';
   else if (/firefox|fxios/i.test(lower)) browser = 'Firefox';
   else if (/safari/i.test(lower) && !/chrome|crios/i.test(lower)) browser = 'Safari';
 
   return { deviceType, os, browser, isBot };
+}
+
+// Extractor de IP real del visitante considerando proxies inversos (Coolify, Traefik, Nginx, Cloudflare)
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) {
+    const list = forwarded.split(',');
+    return list[0].trim();
+  }
+  return req.headers['cf-connecting-ip'] || 
+         req.headers['x-real-ip'] || 
+         req.socket.remoteAddress || 
+         req.ip || 
+         '';
+}
+
+function isPrivateIp(ip) {
+  if (!ip) return true;
+  const clean = ip.replace(/^.*:/, '').trim();
+  if (clean === '1' || clean === '127.0.0.1' || clean === 'localhost') return true;
+  if (/^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)/.test(clean)) return true;
+  return false;
+}
+
+function getFlagEmoji(countryCode) {
+  if (!countryCode || countryCode.length !== 2) return '🌐';
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map(char => 127397 + char.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
+}
+
+function parseLanguage(langHeader = '') {
+  if (!langHeader) return 'Desconocido';
+  const primary = langHeader.split(',')[0].trim().split(';')[0];
+  return primary;
+}
+
+// Resolución Asíncrona de Geolocalización, Ciudad e ISP (Zero Latency para la redirección HTTP)
+async function resolveIpLocationAsync(visitId, ip, webhookUrl, record, meta) {
+  if (!ip || isPrivateIp(ip)) return;
+
+  try {
+    let geo = null;
+    const cached = db.prepare('SELECT * FROM ip_cache WHERE ip = ?').get(ip);
+    if (cached) {
+      geo = cached;
+    } else {
+      const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,lat,lon,timezone,isp,org,as,query`, {
+        signal: AbortSignal.timeout(3500)
+      });
+      const data = await res.json();
+      if (data && data.status === 'success') {
+        geo = {
+          country_code: data.countryCode || '',
+          country_name: data.country || '',
+          region_name: data.regionName || '',
+          city_name: data.city || '',
+          latitude: data.lat || null,
+          longitude: data.lon || null,
+          timezone: data.timezone || '',
+          isp: data.isp || '',
+          org: data.org || data.as || ''
+        };
+
+        try {
+          db.prepare(`
+            INSERT OR REPLACE INTO ip_cache (ip, country_code, country_name, region_name, city_name, latitude, longitude, timezone, isp, org)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            ip, geo.country_code, geo.country_name, geo.region_name, geo.city_name,
+            geo.latitude, geo.longitude, geo.timezone, geo.isp, geo.org
+          );
+        } catch (ce) {
+          console.error('Error guardando en ip_cache:', ce.message);
+        }
+      }
+    }
+
+    if (geo) {
+      db.prepare(`
+        UPDATE visits 
+        SET 
+          country_code = ?,
+          country_name = ?,
+          region_name = ?,
+          city_name = ?,
+          latitude = ?,
+          longitude = ?,
+          timezone = ?,
+          isp = ?,
+          org = ?
+        WHERE id = ?
+      `).run(
+        geo.country_code, geo.country_name, geo.region_name, geo.city_name,
+        geo.latitude, geo.longitude, geo.timezone, geo.isp, geo.org,
+        visitId
+      );
+
+      if (webhookUrl) {
+        dispatchWebhook(webhookUrl, {
+          event: 'qr_scanned_enriched',
+          slug: record.slug,
+          title: record.title || record.slug,
+          short_url: `${BASE_URL}/${record.slug}`,
+          destination: record.long_url,
+          visited_at: new Date().toISOString(),
+          ip: ip,
+          location: {
+            country: geo.country_name,
+            country_code: geo.country_code,
+            region: geo.region_name,
+            city: geo.city_name,
+            flag: getFlagEmoji(geo.country_code),
+            coordinates: geo.latitude && geo.longitude ? `${geo.latitude}, ${geo.longitude}` : null,
+            timezone: geo.timezone
+          },
+          network: {
+            isp: geo.isp,
+            org: geo.org
+          },
+          device_type: meta.deviceType,
+          os: meta.os,
+          browser: meta.browser,
+          language: meta.acceptLanguage,
+          referer: meta.referer || 'Directo (Escaneo QR)',
+          query_params: meta.queryParams,
+          total_scans: (record.visits_count || 0) + 1
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Error enriqueciendo analítica de IP:', err.message);
+  }
 }
 
 // Helper para disparar Webhook asíncrono
@@ -298,6 +516,58 @@ app.get('/api/export/csv', requireAdmin, (req, res) => {
   res.send(csv);
 });
 
+// Exportación de Visitas Detalladas a CSV
+app.get('/api/export/visits/csv', requireAdmin, (req, res) => {
+  try {
+    const { slug } = req.query;
+    let visits;
+    if (slug) {
+      visits = db.prepare('SELECT * FROM visits WHERE slug = ? ORDER BY visited_at DESC').all(slug);
+    } else {
+      visits = db.prepare('SELECT * FROM visits ORDER BY visited_at DESC LIMIT 5000').all();
+    }
+
+    const headers = [
+      'id', 'slug', 'visited_at', 'ip_address', 'country_name', 'country_code',
+      'region_name', 'city_name', 'latitude', 'longitude', 'isp', 'org',
+      'device_type', 'os', 'browser', 'user_language', 'referer', 'is_bot', 'query_params'
+    ];
+
+    let csv = headers.join(',') + '\n';
+    for (const v of visits) {
+      const row = [
+        v.id,
+        `"${v.slug}"`,
+        `"${v.visited_at || ''}"`,
+        `"${v.ip_address || ''}"`,
+        `"${(v.country_name || '').replace(/"/g, '""')}"`,
+        `"${v.country_code || ''}"`,
+        `"${(v.region_name || '').replace(/"/g, '""')}"`,
+        `"${(v.city_name || '').replace(/"/g, '""')}"`,
+        v.latitude || '',
+        v.longitude || '',
+        `"${(v.isp || '').replace(/"/g, '""')}"`,
+        `"${(v.org || '').replace(/"/g, '""')}"`,
+        `"${v.device_type || ''}"`,
+        `"${v.os || ''}"`,
+        `"${v.browser || ''}"`,
+        `"${v.user_language || ''}"`,
+        `"${(v.referer || '').replace(/"/g, '""')}"`,
+        v.is_bot ? '1' : '0',
+        `"${(v.query_params || '').replace(/"/g, '""')}"`
+      ];
+      csv += row.join(',') + '\n';
+    }
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="visitas-${slug || 'todas'}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error al exportar visitas:', error);
+    res.status(500).send('Error exportando visitas');
+  }
+});
+
 // -------------------------------------------------------------
 // ENDPOINTS DE GESTIÓN DE ENLACES (SUPERADMIN)
 // -------------------------------------------------------------
@@ -321,7 +591,7 @@ app.get('/api/urls', requireAdmin, (req, res) => {
   }
 });
 
-// Resumen de analíticas globales
+// Resumen de analíticas globales enriquecido
 app.get('/api/stats', requireAdmin, (req, res) => {
   try {
     const totalUrls = db.prepare('SELECT COUNT(*) as count FROM short_urls').get().count;
@@ -336,16 +606,204 @@ app.get('/api/stats', requireAdmin, (req, res) => {
       SELECT os, COUNT(*) as count FROM visits WHERE is_bot = 0 GROUP BY os ORDER BY count DESC LIMIT 5
     `).all();
 
+    const countryStats = db.prepare(`
+      SELECT country_name, country_code, COUNT(*) as count 
+      FROM visits 
+      WHERE is_bot = 0 AND country_name IS NOT NULL AND country_name != ''
+      GROUP BY country_name, country_code 
+      ORDER BY count DESC 
+      LIMIT 6
+    `).all();
+
+    const cityStats = db.prepare(`
+      SELECT city_name, country_code, country_name, COUNT(*) as count 
+      FROM visits 
+      WHERE is_bot = 0 AND city_name IS NOT NULL AND city_name != ''
+      GROUP BY city_name, country_name 
+      ORDER BY count DESC 
+      LIMIT 6
+    `).all();
+
+    const ispStats = db.prepare(`
+      SELECT isp, COUNT(*) as count 
+      FROM visits 
+      WHERE is_bot = 0 AND isp IS NOT NULL AND isp != ''
+      GROUP BY isp 
+      ORDER BY count DESC 
+      LIMIT 6
+    `).all();
+
     res.json({
       totalUrls,
       totalVisits,
       topUrl: topUrl || null,
       deviceStats,
-      osStats
+      osStats,
+      countryStats: countryStats.map(c => ({ ...c, flag: getFlagEmoji(c.country_code) })),
+      cityStats: cityStats.map(c => ({ ...c, flag: getFlagEmoji(c.country_code) })),
+      ispStats
     });
   } catch (error) {
     console.error('Error al obtener estadísticas:', error);
     res.status(500).json({ error: 'Error interno del servidor.' });
+  }
+});
+
+// Endpoint de analítica detallada y visitantes por enlace
+app.get('/api/urls/:id/visits', requireAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const url = db.prepare('SELECT * FROM short_urls WHERE id = ?').get(id);
+    if (!url) {
+      return res.status(404).json({ error: 'Enlace no encontrado' });
+    }
+
+    const visits = db.prepare(`
+      SELECT 
+        id, slug, visited_at, ip_address, 
+        country_code, country_name, region_name, city_name,
+        latitude, longitude, timezone, isp, org,
+        user_agent, device_type, os, browser, user_language,
+        referer, is_bot, query_params
+      FROM visits 
+      WHERE slug = ?
+      ORDER BY visited_at DESC
+      LIMIT 200
+    `).all(url.slug);
+
+    const totalVisits = db.prepare('SELECT COUNT(*) as count FROM visits WHERE slug = ?').get(url.slug).count;
+    const humanVisits = db.prepare('SELECT COUNT(*) as count FROM visits WHERE slug = ? AND is_bot = 0').get(url.slug).count;
+    const botVisits = totalVisits - humanVisits;
+
+    const countries = db.prepare(`
+      SELECT country_name, country_code, COUNT(*) as count 
+      FROM visits 
+      WHERE slug = ? AND country_name IS NOT NULL AND country_name != ''
+      GROUP BY country_name, country_code 
+      ORDER BY count DESC 
+      LIMIT 8
+    `).all(url.slug);
+
+    const cities = db.prepare(`
+      SELECT city_name, region_name, country_name, country_code, COUNT(*) as count 
+      FROM visits 
+      WHERE slug = ? AND city_name IS NOT NULL AND city_name != ''
+      GROUP BY city_name, country_name 
+      ORDER BY count DESC 
+      LIMIT 8
+    `).all(url.slug);
+
+    const devices = db.prepare(`
+      SELECT device_type, COUNT(*) as count 
+      FROM visits 
+      WHERE slug = ? 
+      GROUP BY device_type 
+      ORDER BY count DESC
+    `).all(url.slug);
+
+    const osStats = db.prepare(`
+      SELECT os, COUNT(*) as count 
+      FROM visits 
+      WHERE slug = ? 
+      GROUP BY os 
+      ORDER BY count DESC 
+      LIMIT 8
+    `).all(url.slug);
+
+    const browsers = db.prepare(`
+      SELECT browser, COUNT(*) as count 
+      FROM visits 
+      WHERE slug = ? 
+      GROUP BY browser 
+      ORDER BY count DESC 
+      LIMIT 8
+    `).all(url.slug);
+
+    const isps = db.prepare(`
+      SELECT isp, COUNT(*) as count 
+      FROM visits 
+      WHERE slug = ? AND isp IS NOT NULL AND isp != ''
+      GROUP BY isp 
+      ORDER BY count DESC 
+      LIMIT 8
+    `).all(url.slug);
+
+    const referrers = db.prepare(`
+      SELECT referer, COUNT(*) as count 
+      FROM visits 
+      WHERE slug = ? AND referer IS NOT NULL AND referer != ''
+      GROUP BY referer 
+      ORDER BY count DESC 
+      LIMIT 8
+    `).all(url.slug);
+
+    res.json({
+      url: {
+        ...url,
+        short_url: `${BASE_URL}/${url.slug}`,
+        tags: JSON.parse(url.tags || '[]')
+      },
+      summary: {
+        totalVisits,
+        humanVisits,
+        botVisits,
+        countries: countries.map(c => ({ ...c, flag: getFlagEmoji(c.country_code) })),
+        cities: cities.map(c => ({ ...c, flag: getFlagEmoji(c.country_code) })),
+        devices,
+        osStats,
+        browsers,
+        isps,
+        referrers
+      },
+      visits: visits.map(v => {
+        let parsedQuery = null;
+        try {
+          parsedQuery = v.query_params ? JSON.parse(v.query_params) : null;
+        } catch {}
+        return {
+          ...v,
+          flag: getFlagEmoji(v.country_code),
+          parsed_query: parsedQuery
+        };
+      })
+    });
+  } catch (error) {
+    console.error('Error al obtener visitas detalladas:', error);
+    res.status(500).json({ error: 'Error al obtener visitas.' });
+  }
+});
+
+// Endpoint de visitas recientes globales (Live Activity Feed)
+app.get('/api/visits/recent', requireAdmin, (req, res) => {
+  try {
+    const visits = db.prepare(`
+      SELECT 
+        v.id, v.slug, v.visited_at, v.ip_address, 
+        v.country_code, v.country_name, v.region_name, v.city_name,
+        v.latitude, v.longitude, v.timezone, v.isp, v.org,
+        v.user_agent, v.device_type, v.os, v.browser, v.user_language,
+        v.referer, v.is_bot, v.query_params,
+        s.title, s.long_url
+      FROM visits v
+      LEFT JOIN short_urls s ON v.slug = s.slug
+      ORDER BY v.visited_at DESC
+      LIMIT 60
+    `).all();
+
+    res.json(visits.map(v => {
+      let parsedQuery = null;
+      try {
+        parsedQuery = v.query_params ? JSON.parse(v.query_params) : null;
+      } catch {}
+      return {
+        ...v,
+        flag: getFlagEmoji(v.country_code),
+        parsed_query: parsedQuery
+      };
+    }));
+  } catch (error) {
+    console.error('Error al obtener visitas recientes:', error);
+    res.status(500).json({ error: 'Error al obtener visitas recientes.' });
   }
 });
 
@@ -745,9 +1203,12 @@ app.get('/:slug', async (req, res, next) => {
       }
     }
 
-    // 4. Analítica y Filtro Anti-Bot
+    // 4. Analítica Enriquecida, Geolocalización e IP Real
     const ua = req.headers['user-agent'] || '';
     const referer = req.headers['referer'] || req.headers['referrer'] || '';
+    const clientIp = getClientIp(req);
+    const acceptLanguage = parseLanguage(req.headers['accept-language']);
+    const queryParamsJson = Object.keys(req.query).length > 0 ? JSON.stringify(req.query) : null;
     const { deviceType, os, browser, isBot } = parseUserAgent(ua);
     const filterBotsSetting = getSetting('filter_bots', '1') === '1';
 
@@ -755,32 +1216,27 @@ app.get('/:slug', async (req, res, next) => {
     const countThisVisit = !isBot || !filterBotsSetting;
     if (countThisVisit) {
       try {
-        db.prepare(`
-          INSERT INTO visits (slug, user_agent, device_type, os, browser, referer, is_bot)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(slug, ua, deviceType, os, browser, referer, isBot ? 1 : 0);
+        const info = db.prepare(`
+          INSERT INTO visits (
+            slug, user_agent, device_type, os, browser, referer, is_bot,
+            ip_address, user_language, query_params
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          slug, ua, deviceType, os, browser, referer, isBot ? 1 : 0,
+          clientIp, acceptLanguage, queryParamsJson
+        );
 
         db.prepare('UPDATE short_urls SET visits_count = visits_count + 1 WHERE id = ?').run(record.id);
+
+        const targetWebhook = record.webhook_url || getSetting('global_webhook_url', '');
+
+        // 5. Resolución asíncrona de geolocalización (Ciudad, País, ISP) y webhook enriquecido
+        resolveIpLocationAsync(info.lastInsertRowid, clientIp, targetWebhook, record, {
+          deviceType, os, browser, referer, ua, acceptLanguage, queryParams: req.query
+        });
       } catch (e) {
         console.error('Error registrando analítica:', e);
-      }
-
-      // 5. Disparar Webhook en Segundo Plano (Alertas en tiempo real a WhatsApp/Telegram/Discord)
-      const targetWebhook = record.webhook_url || getSetting('global_webhook_url', '');
-      if (targetWebhook) {
-        dispatchWebhook(targetWebhook, {
-          event: 'qr_scanned',
-          slug: slug,
-          title: record.title || slug,
-          short_url: `${BASE_URL}/${slug}`,
-          destination: record.long_url,
-          visited_at: new Date().toISOString(),
-          device_type: deviceType,
-          os: os,
-          browser: browser,
-          referer: referer || 'Directo (Escaneo QR)',
-          total_scans: (record.visits_count || 0) + 1
-        });
       }
     }
 

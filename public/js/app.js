@@ -238,6 +238,20 @@ function setupEventListeners() {
     }
   });
 
+  // Modal Analítica y Visitantes Detallados
+  const closeAnalyticsBtn = document.getElementById('closeAnalyticsModalBtn');
+  if (closeAnalyticsBtn) closeAnalyticsBtn.addEventListener('click', closeAnalyticsModal);
+
+  const openGlobalVisitsBtn = document.getElementById('openGlobalVisitsBtn');
+  if (openGlobalVisitsBtn) openGlobalVisitsBtn.addEventListener('click', openGlobalAnalyticsModal);
+
+  const analyticsModalEl = document.getElementById('analyticsModal');
+  if (analyticsModalEl) {
+    analyticsModalEl.addEventListener('click', (e) => {
+      if (e.target === analyticsModalEl) closeAnalyticsModal();
+    });
+  }
+
   // Inicializar Estudio de Cartel para Mostrador
   setupStandeeDesigner();
 }
@@ -341,11 +355,17 @@ function renderTable(urls) {
         <td class="py-3 px-4 max-w-xs truncate text-slate-400 mono">
           <span title="${escapeHtml(u.long_url)}">${escapeHtml(u.long_url)}</span>
         </td>
-        <td class="py-3 px-4 text-center mono font-bold text-emerald-400">
-          ${u.visits_count}
+        <td class="py-3 px-4 text-center">
+          <button onclick="openAnalyticsModal(${u.id})" title="Ver analítica detallada de visitantes" class="px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/30 text-emerald-400 font-mono font-bold rounded-lg text-xs flex items-center gap-1.5 mx-auto transition">
+            <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
+            <span>${u.visits_count}</span>
+          </button>
         </td>
         <td class="py-3 px-4 text-right">
           <div class="flex items-center justify-end gap-1.5">
+            <button onclick="openAnalyticsModal(${u.id})" title="Analítica y Perfil de Visitantes" class="p-1.5 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/60 rounded-lg border border-emerald-800/40 transition">
+              <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
+            </button>
             <button onclick="selectUrlById(${u.id})" title="Ver QR Dinámico" class="p-1.5 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/60 rounded-lg border border-cyan-800/40 transition">
               <i data-lucide="qr-code" class="w-3.5 h-3.5"></i>
             </button>
@@ -956,5 +976,294 @@ window.setStandeeTheme = function(theme) {
     if (t2) { t2.classList.add('standee-neon-text'); t2.style.color = '#ffffff'; }
   }
 };
+
+// -------------------------------------------------------------
+// CONTROLADOR DE ANALÍTICA DETALLADA Y PERFIL DE VISITANTES
+// -------------------------------------------------------------
+window.openAnalyticsModal = async function(id) {
+  const modal = document.getElementById('analyticsModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  document.getElementById('analyticsModalTitle').textContent = 'Cargando analítica...';
+  document.getElementById('analyticsSlugBadge').textContent = '...';
+  document.getElementById('analyticsDestinationText').textContent = 'Obteniendo registros de visitantes...';
+  document.getElementById('analyticsKpiTotal').textContent = '--';
+  document.getElementById('analyticsKpiLocation').textContent = 'Cargando...';
+  document.getElementById('analyticsKpiIsp').textContent = 'Cargando...';
+  document.getElementById('analyticsKpiDevice').textContent = 'Cargando...';
+  document.getElementById('analyticsLocationsList').innerHTML = '<div class="text-slate-500 py-2">Consultando datos...</div>';
+  document.getElementById('analyticsIspsList').innerHTML = '<div class="text-slate-500 py-2">Consultando datos...</div>';
+  document.getElementById('analyticsBrowsersList').innerHTML = '<div class="text-slate-500 py-2">Consultando datos...</div>';
+  document.getElementById('analyticsVisitsTableBody').innerHTML = '<tr><td colspan="7" class="py-6 text-center text-slate-500">Cargando visitantes...</td></tr>';
+
+  try {
+    const res = await fetch(`/api/urls/${id}/visits`);
+    if (!res.ok) {
+      showToast('Error cargando analítica del enlace', 'error');
+      closeAnalyticsModal();
+      return;
+    }
+    const data = await res.json();
+    renderAnalyticsModal(data, false);
+  } catch (err) {
+    console.error('Error al cargar analítica:', err);
+    showToast('Error de conexión al cargar analítica', 'error');
+  }
+};
+
+window.openGlobalAnalyticsModal = async function() {
+  const modal = document.getElementById('analyticsModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  document.getElementById('analyticsModalTitle').textContent = 'Actividad en Vivo (Todos los Enlaces)';
+  document.getElementById('analyticsSlugBadge').textContent = 'GLOBAL';
+  document.getElementById('analyticsDestinationText').textContent = 'Monitor de visitantes y escaneos de toda la plataforma en tiempo real';
+  document.getElementById('analyticsExportCsvBtn').href = '/api/export/visits/csv';
+
+  try {
+    const [visitsRes, statsRes] = await Promise.all([
+      fetch('/api/visits/recent'),
+      fetch('/api/stats')
+    ]);
+    const visits = await visitsRes.json();
+    const stats = await statsRes.json();
+
+    const data = {
+      url: {
+        title: 'Monitor de Actividad Global',
+        slug: 'todos',
+        short_url: window.location.origin,
+        long_url: 'Todos los enlaces y códigos QR activos'
+      },
+      summary: {
+        totalVisits: stats.totalVisits || visits.length,
+        humanVisits: stats.totalVisits || visits.length,
+        botVisits: 0,
+        countries: stats.countryStats || [],
+        cities: stats.cityStats || [],
+        devices: stats.deviceStats || [],
+        osStats: stats.osStats || [],
+        browsers: [],
+        isps: stats.ispStats || [],
+        referrers: []
+      },
+      visits: visits
+    };
+
+    renderAnalyticsModal(data, true);
+  } catch (err) {
+    console.error('Error cargando analítica global:', err);
+  }
+};
+
+window.closeAnalyticsModal = function() {
+  const modal = document.getElementById('analyticsModal');
+  if (modal) modal.classList.add('hidden');
+};
+
+function renderAnalyticsModal(data, isGlobal) {
+  const u = data.url;
+  const s = data.summary;
+  const visits = data.visits || [];
+
+  document.getElementById('analyticsModalTitle').textContent = isGlobal ? 'Actividad Global en Vivo' : (u.title || u.slug);
+  document.getElementById('analyticsSlugBadge').textContent = isGlobal ? 'GLOBAL' : `/${u.slug}`;
+  document.getElementById('analyticsDestinationText').textContent = isGlobal ? 'Monitor en vivo de toda tu plataforma' : `Destino: ${u.long_url}`;
+  document.getElementById('analyticsExportCsvBtn').href = isGlobal ? '/api/export/visits/csv' : `/api/export/visits/csv?slug=${u.slug}`;
+
+  // KPIs
+  document.getElementById('analyticsKpiTotal').textContent = s.totalVisits || 0;
+  const humanRatio = s.totalVisits > 0 ? Math.round((s.humanVisits / s.totalVisits) * 100) : 100;
+  document.getElementById('analyticsKpiBotRatio').textContent = `${humanRatio}% humanos (${s.botVisits || 0} bots)`;
+
+  // Ubicación Top
+  if (s.cities && s.cities.length > 0) {
+    const topCity = s.cities[0];
+    document.getElementById('analyticsKpiLocation').textContent = `${topCity.flag || '📍'} ${topCity.city_name || 'Desconocida'}`;
+    document.getElementById('analyticsKpiCity').textContent = `${topCity.country_name || ''} (${topCity.count} clics)`;
+  } else if (s.countries && s.countries.length > 0) {
+    const topCountry = s.countries[0];
+    document.getElementById('analyticsKpiLocation').textContent = `${topCountry.flag || '📍'} ${topCountry.country_name}`;
+    document.getElementById('analyticsKpiCity').textContent = `${topCountry.count} visitas`;
+  } else {
+    document.getElementById('analyticsKpiLocation').textContent = 'Sin ubicación';
+    document.getElementById('analyticsKpiCity').textContent = 'Esperando clics';
+  }
+
+  // Red / ISP Top
+  if (s.isps && s.isps.length > 0) {
+    const topIsp = s.isps[0];
+    document.getElementById('analyticsKpiIsp').textContent = topIsp.isp;
+  } else {
+    document.getElementById('analyticsKpiIsp').textContent = 'Desconocido';
+  }
+
+  // Dispositivo Top
+  if (s.devices && s.devices.length > 0) {
+    const topDev = s.devices[0];
+    document.getElementById('analyticsKpiDevice').textContent = `${topDev.device_type} (${topDev.count})`;
+    const topOs = (s.osStats && s.osStats.length > 0) ? s.osStats[0].os : '';
+    document.getElementById('analyticsKpiOs').textContent = topOs ? `SO principal: ${topOs}` : '';
+  } else {
+    document.getElementById('analyticsKpiDevice').textContent = 'Sin datos';
+    document.getElementById('analyticsKpiOs').textContent = '--';
+  }
+
+  // Tarjeta 1: Ciudades y Países
+  const locList = document.getElementById('analyticsLocationsList');
+  if ((s.cities && s.cities.length > 0) || (s.countries && s.countries.length > 0)) {
+    const list = s.cities && s.cities.length > 0 ? s.cities : s.countries;
+    locList.innerHTML = list.slice(0, 5).map(item => `
+      <div class="flex items-center justify-between py-1 border-b border-slate-800/40 last:border-0">
+        <span class="flex items-center gap-1.5 truncate">
+          <span>${item.flag || '🌐'}</span>
+          <span class="font-medium text-white truncate">${item.city_name ? `${item.city_name}, ` : ''}${item.country_name || item.country_code}</span>
+        </span>
+        <span class="mono font-bold text-emerald-400 ml-2">${item.count}</span>
+      </div>
+    `).join('');
+  } else {
+    locList.innerHTML = '<div class="text-slate-500 py-3 text-center">No hay datos geográficos aún</div>';
+  }
+
+  // Tarjeta 2: Redes / ISPs
+  const ispsList = document.getElementById('analyticsIspsList');
+  if (s.isps && s.isps.length > 0) {
+    ispsList.innerHTML = s.isps.slice(0, 5).map(item => `
+      <div class="flex items-center justify-between py-1 border-b border-slate-800/40 last:border-0">
+        <span class="truncate font-medium text-white" title="${escapeHtml(item.isp)}">${escapeHtml(item.isp)}</span>
+        <span class="mono font-bold text-amber-400 ml-2">${item.count}</span>
+      </div>
+    `).join('');
+  } else {
+    ispsList.innerHTML = '<div class="text-slate-500 py-3 text-center">No se detectaron proveedores aún</div>';
+  }
+
+  // Tarjeta 3: Canales y Navegadores
+  const browList = document.getElementById('analyticsBrowsersList');
+  const referrersOrBrowsers = (s.browsers && s.browsers.length > 0) ? s.browsers : (s.referrers || []);
+  if (referrersOrBrowsers.length > 0) {
+    browList.innerHTML = referrersOrBrowsers.slice(0, 5).map(item => `
+      <div class="flex items-center justify-between py-1 border-b border-slate-800/40 last:border-0">
+        <span class="truncate text-slate-300" title="${escapeHtml(item.browser || item.referer)}">${escapeHtml(item.browser || item.referer || 'Directo')}</span>
+        <span class="mono font-bold text-cyan-400 ml-2">${item.count}</span>
+      </div>
+    `).join('');
+  } else {
+    browList.innerHTML = '<div class="text-slate-500 py-3 text-center">Esperando navegación</div>';
+  }
+
+  // Tabla Detallada de Visitas Individuales
+  document.getElementById('analyticsVisitsCountBadge').textContent = `${visits.length} visitas registradas`;
+  const vBody = document.getElementById('analyticsVisitsTableBody');
+
+  if (visits.length === 0) {
+    vBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="py-8 text-center text-slate-500">
+          Aún no se han registrado visitas para este enlace. ¡Comparte el enlace o escanea el QR para ver los datos en vivo!
+        </td>
+      </tr>
+    `;
+    refreshIcons();
+    return;
+  }
+
+  vBody.innerHTML = visits.map(v => {
+    const dateObj = new Date(v.visited_at);
+    const dateFormatted = !isNaN(dateObj) ? dateObj.toLocaleString('es-CL', {
+      day: '2-digit', month: '2-digit', year: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    }) : v.visited_at;
+
+    const locationParts = [];
+    if (v.city_name) locationParts.push(v.city_name);
+    if (v.region_name && v.region_name !== v.city_name) locationParts.push(v.region_name);
+    if (v.country_name) locationParts.push(v.country_name);
+    const locationStr = locationParts.length > 0 ? locationParts.join(', ') : 'Ubicación Desconocida';
+
+    let devIcon = 'laptop';
+    if (v.device_type === 'Móvil') devIcon = 'smartphone';
+    if (v.device_type === 'Tablet') devIcon = 'tablet';
+
+    let refererDisplay = 'Directo / QR Físico';
+    if (v.referer) {
+      if (v.referer.includes('whatsapp')) refererDisplay = '🟢 WhatsApp';
+      else if (v.referer.includes('instagram')) refererDisplay = '🟣 Instagram';
+      else if (v.referer.includes('facebook')) refererDisplay = '🔵 Facebook';
+      else if (v.referer.includes('google')) refererDisplay = '🔍 Google';
+      else if (v.referer.includes('tiktok')) refererDisplay = '🎵 TikTok';
+      else {
+        try {
+          refererDisplay = new URL(v.referer).hostname;
+        } catch {
+          refererDisplay = v.referer;
+        }
+      }
+    }
+
+    let paramsHtml = '<span class="text-slate-500 text-[11px]">-</span>';
+    if (v.parsed_query && Object.keys(v.parsed_query).length > 0) {
+      const tags = [];
+      for (const [k, val] of Object.entries(v.parsed_query)) {
+        if (['cli', 'cliente', 'user', 'usuario', 'id', 'email', 'tel'].includes(k.toLowerCase())) {
+          tags.push(`<span class="bg-emerald-950 text-emerald-300 border border-emerald-600/50 px-1.5 py-0.5 rounded text-[10px] font-bold">👤 ${escapeHtml(k)}: ${escapeHtml(val)}</span>`);
+        } else if (k.startsWith('utm_')) {
+          tags.push(`<span class="bg-cyan-950 text-cyan-300 border border-cyan-800 px-1.5 py-0.5 rounded text-[10px]">🏷️ ${escapeHtml(k.replace('utm_', ''))}: ${escapeHtml(val)}</span>`);
+        } else {
+          tags.push(`<span class="bg-slate-800 text-slate-300 px-1.5 py-0.5 rounded text-[10px]">${escapeHtml(k)}=${escapeHtml(val)}</span>`);
+        }
+      }
+      paramsHtml = `<div class="flex flex-wrap gap-1">${tags.join('')}</div>`;
+    }
+
+    const botBadge = v.is_bot ? '<span class="bg-rose-950 text-rose-400 border border-rose-800 px-1.5 py-0.5 rounded text-[9px] ml-1">Bot</span>' : '';
+
+    return `
+      <tr class="hover:bg-slate-900/50 transition">
+        <td class="py-2.5 px-3 text-[11px] text-slate-300 mono whitespace-nowrap">
+          ${dateFormatted}
+          ${botBadge}
+        </td>
+        <td class="py-2.5 px-3">
+          <div class="text-white font-medium flex items-center gap-1.5">
+            <span>${v.flag || '🌐'}</span>
+            <span class="truncate max-w-[180px]" title="${escapeHtml(locationStr)}">${escapeHtml(locationStr)}</span>
+          </div>
+          <div class="text-[10px] text-slate-500 mono mt-0.5 flex items-center gap-1">
+            <span>IP: ${v.ip_address || 'No registrada'}</span>
+            ${v.latitude && v.longitude ? `<a href="https://maps.google.com/?q=${v.latitude},${v.longitude}" target="_blank" class="text-cyan-400 hover:underline" title="Ver en Google Maps">🗺️</a>` : ''}
+          </div>
+        </td>
+        <td class="py-2.5 px-3 max-w-[150px]">
+          <div class="text-amber-300 text-xs truncate" title="${escapeHtml(v.isp || v.org || 'Proveedor no detectado')}">
+            ${escapeHtml(v.isp || v.org || 'Red Residencial / Móvil')}
+          </div>
+          ${v.org && v.org !== v.isp ? `<div class="text-[10px] text-slate-500 truncate" title="${escapeHtml(v.org)}">${escapeHtml(v.org)}</div>` : ''}
+        </td>
+        <td class="py-2.5 px-3 whitespace-nowrap">
+          <div class="flex items-center gap-1.5 text-xs text-slate-200">
+            <i data-lucide="${devIcon}" class="w-3.5 h-3.5 text-purple-400"></i>
+            <span>${v.device_type} • <b class="text-white">${v.os}</b></span>
+          </div>
+        </td>
+        <td class="py-2.5 px-3 whitespace-nowrap">
+          <div class="text-xs text-slate-200 font-medium">${v.browser}</div>
+          <div class="text-[10px] text-slate-500">${v.user_language || 'es'}</div>
+        </td>
+        <td class="py-2.5 px-3 text-xs text-slate-400 max-w-[120px] truncate" title="${escapeHtml(v.referer || 'Directo')}">
+          ${refererDisplay}
+        </td>
+        <td class="py-2.5 px-3">
+          ${paramsHtml}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  refreshIcons();
+}
 
 

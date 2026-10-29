@@ -128,17 +128,31 @@
               <i data-lucide="download" class="w-3.5 h-3.5 text-cyan-400"></i>
               <span>Exportar</span>
             </button>
-            <div class="absolute right-0 mt-1 w-36 glass rounded-xl shadow-xl py-1 hidden group-hover:block z-50 border border-slate-800">
+            <div class="absolute right-0 mt-1 w-44 glass rounded-xl shadow-xl py-1 hidden group-hover:block z-50 border border-slate-800">
               <a href="/api/export/csv" class="block px-3 py-2 text-xs text-slate-300 hover:bg-cyan-500 hover:text-slate-950 transition flex items-center gap-2">
                 <i data-lucide="sheet" class="w-3.5 h-3.5"></i>
-                <span>CSV (Excel)</span>
+                <span>Enlaces (CSV)</span>
+              </a>
+              <a href="/api/export/visits/csv" class="block px-3 py-2 text-xs text-slate-300 hover:bg-cyan-500 hover:text-slate-950 transition flex items-center gap-2">
+                <i data-lucide="users" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span>Visitas & IPs (CSV)</span>
               </a>
               <a href="/api/export/json" class="block px-3 py-2 text-xs text-slate-300 hover:bg-cyan-500 hover:text-slate-950 transition flex items-center gap-2">
                 <i data-lucide="file-json" class="w-3.5 h-3.5"></i>
-                <span>JSON</span>
+                <span>Copia JSON</span>
               </a>
             </div>
           </div>
+
+          <!-- Botón Actividad en Vivo (Monitor de Visitantes) -->
+          <button 
+            id="openGlobalVisitsBtn"
+            class="text-xs font-semibold text-emerald-300 hover:text-emerald-200 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-700/40 px-3 py-2 rounded-xl transition flex items-center gap-1.5"
+            title="Ver visitantes recientes en tiempo real"
+          >
+            <i data-lucide="activity" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span>En Vivo</span>
+          </button>
 
           <!-- Botón Configuración Global -->
           <button 
@@ -174,12 +188,15 @@
           <div id="statTotalUrls" class="text-2xl font-bold text-white mono">0</div>
         </div>
 
-        <div class="glass-card rounded-2xl p-5 border border-slate-800/80">
+        <div class="glass-card rounded-2xl p-5 border border-slate-800/80 hover:border-emerald-500/40 transition cursor-pointer group" onclick="openGlobalAnalyticsModal()">
           <div class="flex items-center justify-between text-slate-400 mb-2">
-            <span class="text-xs font-semibold uppercase tracking-wider">Escaneos Humanos</span>
+            <span class="text-xs font-semibold uppercase tracking-wider group-hover:text-emerald-400 transition">Escaneos Humanos</span>
             <i data-lucide="eye" class="w-4 h-4 text-emerald-400"></i>
           </div>
-          <div id="statTotalVisits" class="text-2xl font-bold text-white mono">0</div>
+          <div class="flex items-baseline justify-between">
+            <div id="statTotalVisits" class="text-2xl font-bold text-white mono">0</div>
+            <span class="text-[10px] text-emerald-400 flex items-center gap-0.5 group-hover:underline">Ver visitantes →</span>
+          </div>
         </div>
 
         <div class="glass-card rounded-2xl p-5 border border-slate-800/80">
@@ -1205,6 +1222,162 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: ANALÍTICA Y VISITANTES DETALLADOS   -->
+  <!-- ========================================== -->
+  <div id="analyticsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+    <div class="glass max-w-5xl w-full rounded-3xl p-6 sm:p-8 border border-emerald-500/30 shadow-2xl my-8 max-h-[92vh] flex flex-col">
+      <!-- Modal Header -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="p-2.5 rounded-2xl bg-emerald-950/80 border border-emerald-500/30 text-emerald-400">
+            <i data-lucide="bar-chart-2" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 id="analyticsModalTitle" class="text-base font-bold text-white">Analítica y Perfil de Visitantes</h3>
+              <span id="analyticsSlugBadge" class="text-xs font-mono bg-cyan-950 text-cyan-400 border border-cyan-800 px-2.5 py-0.5 rounded-full">/slug</span>
+            </div>
+            <p id="analyticsDestinationText" class="text-xs text-slate-400 truncate max-w-md mt-0.5">Destino: --</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <a id="analyticsExportCsvBtn" href="#" class="px-3 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition">
+            <i data-lucide="download" class="w-3.5 h-3.5 text-cyan-400"></i>
+            <span>Exportar CSV</span>
+          </a>
+          <button id="closeAnalyticsModalBtn" class="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="flex-1 overflow-y-auto py-5 space-y-6 pr-1">
+        
+        <!-- KPIs Rápidos -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+            <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-1 flex items-center justify-between">
+              <span>Total Clics</span>
+              <i data-lucide="mouse-pointer" class="w-3.5 h-3.5 text-cyan-400"></i>
+            </div>
+            <div id="analyticsKpiTotal" class="text-xl font-bold text-white mono">0</div>
+            <div id="analyticsKpiBotRatio" class="text-[10px] text-emerald-400 mt-1 font-medium">100% humanos</div>
+          </div>
+
+          <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+            <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-1 flex items-center justify-between">
+              <span>Ubicación Top</span>
+              <i data-lucide="map-pin" class="w-3.5 h-3.5 text-emerald-400"></i>
+            </div>
+            <div id="analyticsKpiLocation" class="text-sm font-bold text-white truncate">--</div>
+            <div id="analyticsKpiCity" class="text-[10px] text-slate-400 mt-1 truncate">Sin registros</div>
+          </div>
+
+          <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+            <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-1 flex items-center justify-between">
+              <span>Red / Operador</span>
+              <i data-lucide="wifi" class="w-3.5 h-3.5 text-amber-400"></i>
+            </div>
+            <div id="analyticsKpiIsp" class="text-sm font-bold text-white truncate">--</div>
+            <div class="text-[10px] text-slate-400 mt-1">Proveedor ISP</div>
+          </div>
+
+          <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
+            <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider mb-1 flex items-center justify-between">
+              <span>Dispositivo Top</span>
+              <i data-lucide="smartphone" class="w-3.5 h-3.5 text-purple-400"></i>
+            </div>
+            <div id="analyticsKpiDevice" class="text-sm font-bold text-white truncate">--</div>
+            <div id="analyticsKpiOs" class="text-[10px] text-slate-400 mt-1 truncate">--</div>
+          </div>
+        </div>
+
+        <!-- Desglose / Tarjetas de Distribución -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Ubicaciones -->
+          <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                <i data-lucide="globe" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span>Ciudades y Países</span>
+              </span>
+            </div>
+            <div id="analyticsLocationsList" class="space-y-2 text-xs text-slate-300">
+              <!-- Render dinámico -->
+            </div>
+          </div>
+
+          <!-- Operadores / ISPs (Quiénes son a nivel red/empresa) -->
+          <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                <i data-lucide="network" class="w-3.5 h-3.5 text-amber-400"></i>
+                <span>Proveedores / Red</span>
+              </span>
+            </div>
+            <div id="analyticsIspsList" class="space-y-2 text-xs text-slate-300">
+              <!-- Render dinámico -->
+            </div>
+          </div>
+
+          <!-- Navegadores y Canales -->
+          <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
+              <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                <i data-lucide="compass" class="w-3.5 h-3.5 text-cyan-400"></i>
+                <span>Canales & Navegadores</span>
+              </span>
+            </div>
+            <div id="analyticsBrowsersList" class="space-y-2 text-xs text-slate-300">
+              <!-- Render dinámico -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabla Detallada de Visitas Individuales ("Quiénes Ingresaron") -->
+        <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-800/80 pb-3">
+            <div>
+              <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+                <i data-lucide="user-check" class="w-4 h-4 text-emerald-400"></i>
+                <span>Registro Individual de Visitantes (Auditoría de Acceso)</span>
+              </h4>
+              <p class="text-[11px] text-slate-400">
+                Cada fila es una persona o equipo real que abrió el enlace o escaneó el código QR.
+              </p>
+            </div>
+            <span id="analyticsVisitsCountBadge" class="text-[10px] font-mono bg-slate-800 text-slate-300 px-2.5 py-1 rounded-full w-fit">
+              0 visitas registradas
+            </span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs text-slate-300">
+              <thead class="text-[10px] uppercase tracking-wider text-slate-400 bg-slate-950/80 border-b border-slate-800">
+                <tr>
+                  <th class="py-2.5 px-3">Fecha y Hora</th>
+                  <th class="py-2.5 px-3">Ubicación & IP</th>
+                  <th class="py-2.5 px-3">Proveedor / Red</th>
+                  <th class="py-2.5 px-3">Dispositivo & SO</th>
+                  <th class="py-2.5 px-3">Navegador & Idioma</th>
+                  <th class="py-2.5 px-3">Origen / Canal</th>
+                  <th class="py-2.5 px-3">Identificador / UTM</th>
+                </tr>
+              </thead>
+              <tbody id="analyticsVisitsTableBody" class="divide-y divide-slate-800/50 font-sans">
+                <!-- Render dinámico -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 
