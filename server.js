@@ -633,6 +633,34 @@ app.get('/api/stats', requireAdmin, (req, res) => {
       LIMIT 6
     `).all();
 
+    const browserStats = db.prepare(`
+      SELECT browser, COUNT(*) as count 
+      FROM visits 
+      WHERE is_bot = 0 AND browser IS NOT NULL AND browser != ''
+      GROUP BY browser 
+      ORDER BY count DESC 
+      LIMIT 6
+    `).all();
+
+    const referrerStats = db.prepare(`
+      SELECT 
+        CASE 
+          WHEN referer IS NULL OR referer = '' THEN 'Directo / QR Físico'
+          WHEN referer LIKE '%whatsapp%' THEN 'WhatsApp'
+          WHEN referer LIKE '%instagram%' THEN 'Instagram'
+          WHEN referer LIKE '%facebook%' THEN 'Facebook'
+          WHEN referer LIKE '%google%' THEN 'Google'
+          WHEN referer LIKE '%tiktok%' THEN 'TikTok'
+          ELSE referer
+        END as referer,
+        COUNT(*) as count 
+      FROM visits 
+      WHERE is_bot = 0
+      GROUP BY 1
+      ORDER BY count DESC 
+      LIMIT 6
+    `).all();
+
     res.json({
       totalUrls,
       totalVisits,
@@ -641,7 +669,9 @@ app.get('/api/stats', requireAdmin, (req, res) => {
       osStats,
       countryStats: countryStats.map(c => ({ ...c, flag: getFlagEmoji(c.country_code) })),
       cityStats: cityStats.map(c => ({ ...c, flag: getFlagEmoji(c.country_code) })),
-      ispStats
+      ispStats,
+      browserStats,
+      referrerStats
     });
   } catch (error) {
     console.error('Error al obtener estadísticas:', error);
@@ -729,10 +759,20 @@ app.get('/api/urls/:id/visits', requireAdmin, (req, res) => {
     `).all(url.slug);
 
     const referrers = db.prepare(`
-      SELECT referer, COUNT(*) as count 
+      SELECT 
+        CASE 
+          WHEN referer IS NULL OR referer = '' THEN 'Directo / QR Físico'
+          WHEN referer LIKE '%whatsapp%' THEN 'WhatsApp'
+          WHEN referer LIKE '%instagram%' THEN 'Instagram'
+          WHEN referer LIKE '%facebook%' THEN 'Facebook'
+          WHEN referer LIKE '%google%' THEN 'Google'
+          WHEN referer LIKE '%tiktok%' THEN 'TikTok'
+          ELSE referer
+        END as referer,
+        COUNT(*) as count 
       FROM visits 
-      WHERE slug = ? AND referer IS NOT NULL AND referer != ''
-      GROUP BY referer 
+      WHERE slug = ?
+      GROUP BY 1
       ORDER BY count DESC 
       LIMIT 8
     `).all(url.slug);

@@ -1045,9 +1045,9 @@ window.openGlobalAnalyticsModal = async function() {
         cities: stats.cityStats || [],
         devices: stats.deviceStats || [],
         osStats: stats.osStats || [],
-        browsers: [],
+        browsers: stats.browserStats || [],
         isps: stats.ispStats || [],
-        referrers: []
+        referrers: stats.referrerStats || []
       },
       visits: visits
     };
@@ -1143,11 +1143,41 @@ function renderAnalyticsModal(data, isGlobal) {
 
   // Tarjeta 3: Canales y Navegadores
   const browList = document.getElementById('analyticsBrowsersList');
-  const referrersOrBrowsers = (s.browsers && s.browsers.length > 0) ? s.browsers : (s.referrers || []);
-  if (referrersOrBrowsers.length > 0) {
-    browList.innerHTML = referrersOrBrowsers.slice(0, 5).map(item => `
+  const items = [];
+  if (s.browsers && s.browsers.length > 0) {
+    s.browsers.forEach(b => items.push({ label: b.browser, count: b.count, type: 'Navegador' }));
+  }
+  if (s.referrers && s.referrers.length > 0) {
+    s.referrers.forEach(r => items.push({ label: r.referer, count: r.count, type: 'Origen' }));
+  }
+
+  // Si no vinieron pre-agrupados, extraer directo de visits
+  if (items.length === 0 && visits.length > 0) {
+    const bMap = {};
+    const rMap = {};
+    visits.forEach(v => {
+      const b = v.browser || 'Navegador Web';
+      bMap[b] = (bMap[b] || 0) + 1;
+      let r = 'Directo / QR Físico';
+      if (v.referer) {
+        if (v.referer.includes('whatsapp')) r = 'WhatsApp';
+        else if (v.referer.includes('instagram')) r = 'Instagram';
+        else if (v.referer.includes('facebook')) r = 'Facebook';
+        else r = v.referer;
+      }
+      rMap[r] = (rMap[r] || 0) + 1;
+    });
+    for (const [k, count] of Object.entries(bMap)) items.push({ label: k, count: count, type: 'Navegador' });
+    for (const [k, count] of Object.entries(rMap)) items.push({ label: k, count: count, type: 'Origen' });
+  }
+
+  if (items.length > 0) {
+    browList.innerHTML = items.slice(0, 6).map(item => `
       <div class="flex items-center justify-between py-1 border-b border-slate-800/40 last:border-0">
-        <span class="truncate text-slate-300" title="${escapeHtml(item.browser || item.referer)}">${escapeHtml(item.browser || item.referer || 'Directo')}</span>
+        <span class="flex items-center gap-1.5 truncate text-slate-300">
+          <span class="text-[9px] font-semibold px-1.5 py-0.5 rounded ${item.type === 'Origen' ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' : 'bg-purple-950 text-purple-300 border border-purple-800'}">${item.type}</span>
+          <span class="truncate font-medium text-white" title="${escapeHtml(item.label)}">${escapeHtml(item.label)}</span>
+        </span>
         <span class="mono font-bold text-cyan-400 ml-2">${item.count}</span>
       </div>
     `).join('');
