@@ -108,7 +108,8 @@ function runMigrations() {
     { name: 'utm_campaign', type: 'TEXT' },
     { name: 'forward_query', type: 'INTEGER DEFAULT 1' },
     { name: 'qr_color_dark', type: "TEXT DEFAULT '#0f172a'" },
-    { name: 'qr_color_light', type: "TEXT DEFAULT '#ffffff'" }
+    { name: 'qr_color_light', type: "TEXT DEFAULT '#ffffff'" },
+    { name: 'request_gps', type: 'INTEGER DEFAULT 0' }
   ];
 
   for (const col of newColumns) {
@@ -309,46 +310,50 @@ function parseLanguage(langHeader = '') {
 
 // Resolución Asíncrona de Geolocalización, Ciudad e ISP (Zero Latency para la redirección HTTP)
 async function resolveIpLocationAsync(visitId, ip, webhookUrl, record, meta) {
-  if (!ip || isPrivateIp(ip)) return;
+  let geo = null;
+  if (ip && !isPrivateIp(ip)) {
+    try {
+      const cached = db.prepare('SELECT * FROM ip_cache WHERE ip = ?').get(ip);
+      if (cached) {
+        geo = cached;
+      } else {
+        const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,lat,lon,timezone,isp,org,as,query`, {
+          signal: AbortSignal.timeout(3500)
+        });
+        const data = await res.json();
+        if (data && data.status === 'success') {
+          geo = {
+            country_code: data.countryCode || '',
+            country_name: data.country || '',
+            region_name: data.regionName || '',
+            city_name: data.city || '',
+            latitude: data.lat || null,
+            longitude: data.lon || null,
+            timezone: data.timezone || '',
+            isp: data.isp || '',
+            org: data.org || data.as || ''
+          };
 
-  try {
-    let geo = null;
-    const cached = db.prepare('SELECT * FROM ip_cache WHERE ip = ?').get(ip);
-    if (cached) {
-      geo = cached;
-    } else {
-      const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,lat,lon,timezone,isp,org,as,query`, {
-        signal: AbortSignal.timeout(3500)
-      });
-      const data = await res.json();
-      if (data && data.status === 'success') {
-        geo = {
-          country_code: data.countryCode || '',
-          country_name: data.country || '',
-          region_name: data.regionName || '',
-          city_name: data.city || '',
-          latitude: data.lat || null,
-          longitude: data.lon || null,
-          timezone: data.timezone || '',
-          isp: data.isp || '',
-          org: data.org || data.as || ''
-        };
-
-        try {
-          db.prepare(`
-            INSERT OR REPLACE INTO ip_cache (ip, country_code, country_name, region_name, city_name, latitude, longitude, timezone, isp, org)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            ip, geo.country_code, geo.country_name, geo.region_name, geo.city_name,
-            geo.latitude, geo.longitude, geo.timezone, geo.isp, geo.org
-          );
-        } catch (ce) {
-          console.error('Error guardando en ip_cache:', ce.message);
+          try {
+            db.prepare(`
+              INSERT OR REPLACE INTO ip_cache (ip, country_code, country_name, region_name, city_name, latitude, longitude, timezone, isp, org)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              ip, geo.country_code, geo.country_name, geo.region_name, geo.city_name,
+              geo.latitude, geo.longitude, geo.timezone, geo.isp, geo.org
+            );
+          } catch (ce) {
+            console.error('Error guardando en ip_cache:', ce.message);
+          }
         }
       }
+    } catch (err) {
+      console.error('Error enriqueciendo analítica de IP:', err.message);
     }
+  }
 
-    if (geo) {
+  if (geo) {
+    try {
       db.prepare(`
         UPDATE visits 
         SET 
@@ -367,41 +372,50 @@ async function resolveIpLocationAsync(visitId, ip, webhookUrl, record, meta) {
         geo.latitude, geo.longitude, geo.timezone, geo.isp, geo.org,
         visitId
       );
-
-      if (webhookUrl) {
-        dispatchWebhook(webhookUrl, {
-          event: 'qr_scanned_enriched',
-          slug: record.slug,
-          title: record.title || record.slug,
-          short_url: `${BASE_URL}/${record.slug}`,
-          destination: record.long_url,
-          visited_at: new Date().toISOString(),
-          ip: ip,
-          location: {
-            country: geo.country_name,
-            country_code: geo.country_code,
-            region: geo.region_name,
-            city: geo.city_name,
-            flag: getFlagEmoji(geo.country_code),
-            coordinates: geo.latitude && geo.longitude ? `${geo.latitude}, ${geo.longitude}` : null,
-            timezone: geo.timezone
-          },
-          network: {
-            isp: geo.isp,
-            org: geo.org
-          },
-          device_type: meta.deviceType,
-          os: meta.os,
-          browser: meta.browser,
-          language: meta.acceptLanguage,
-          referer: meta.referer || 'Directo (Escaneo QR)',
-          query_params: meta.queryParams,
-          total_scans: (record.visits_count || 0) + 1
-        });
-      }
+    } catch (ue) {
+      console.error('Error actualizando visita con geo:', ue.message);
     }
-  } catch (err) {
-    console.error('Error enriqueciendo analítica de IP:', err.message);
+  }
+
+  // Notificación garantizada al Webhook (Telegram / Discord) siempre
+  if (webhookUrl) {
+    dispatchWebhook(webhookUrl, {
+      event: 'qr_scanned_enriched',
+      slug: record.slug,
+      title: record.title || record.slug,
+      short_url: `${BASE_URL}/${record.slug}`,
+      destination: record.long_url,
+      visited_at: new Date().toISOString(),
+      ip: ip || 'Desconocida',
+      location: geo ? {
+        country: geo.country_name,
+        country_code: geo.country_code,
+        region: geo.region_name,
+        city: geo.city_name,
+        flag: getFlagEmoji(geo.country_code),
+        coordinates: geo.latitude && geo.longitude ? `${geo.latitude}, ${geo.longitude}` : null,
+        timezone: geo.timezone
+      } : {
+        country: 'Chile',
+        country_code: 'CL',
+        region: '',
+        city: 'Ubicación aproximada',
+        flag: '📍',
+        coordinates: null,
+        timezone: 'America/Santiago'
+      },
+      network: {
+        isp: geo ? geo.isp : 'Red Local / Proxy',
+        org: geo ? geo.org : ''
+      },
+      device_type: meta.deviceType,
+      os: meta.os,
+      browser: meta.browser,
+      language: meta.acceptLanguage,
+      referer: meta.referer || 'Directo (Escaneo QR)',
+      query_params: meta.queryParams,
+      total_scans: (record.visits_count || 0) + 1
+    });
   }
 }
 
@@ -423,7 +437,10 @@ async function dispatchWebhook(url, payload) {
       } catch {}
 
       if (chatId) {
-        const loc = payload.location ? `${payload.location.flag || '📍'} ${payload.location.city || 'Desconocida'}, ${payload.location.country || ''}` : 'Ubicación no disponible';
+        let loc = payload.location ? `${payload.location.flag || '📍'} ${payload.location.city || 'Desconocida'}, ${payload.location.country || ''}` : 'Ubicación no disponible';
+        if (payload.location && payload.location.coordinates) {
+          loc += `\n🗺️ <a href="https://maps.google.com/?q=${payload.location.coordinates}">Coordenadas GPS (${payload.location.coordinates})</a>`;
+        }
         const isp = payload.network ? (payload.network.isp || payload.network.org || 'Red Móvil / Hogar') : 'No detectado';
         let cliTag = '';
         if (payload.query_params && Object.keys(payload.query_params).length > 0) {
@@ -634,7 +651,8 @@ app.get('/api/urls', requireAdmin, (req, res) => {
       tags: JSON.parse(u.tags || '[]'),
       is_expired: u.expires_at ? new Date() > new Date(u.expires_at) : false,
       is_limit_reached: u.max_visits ? u.visits_count >= u.max_visits : false,
-      has_password: Boolean(u.link_password && u.link_password.trim() !== '')
+      has_password: Boolean(u.link_password && u.link_password.trim() !== ''),
+      request_gps: Boolean(u.request_gps)
     }));
     res.json(formatted);
   } catch (error) {
@@ -921,7 +939,8 @@ app.post('/api/urls', requireAdmin, async (req, res) => {
       utm_campaign,
       forward_query,
       qr_color_dark,
-      qr_color_light
+      qr_color_light,
+      request_gps
     } = req.body;
 
     if (!long_url) {
@@ -945,6 +964,7 @@ app.post('/api/urls', requireAdmin, async (req, res) => {
 
     const titleValue = title && title.trim() ? title.trim() : slug;
     const tagsValue = JSON.stringify(Array.isArray(tags) ? tags : []);
+    const requestGpsValue = (request_gps === 1 || request_gps === true || request_gps === '1') ? 1 : 0;
 
     const insert = db.prepare(`
       INSERT INTO short_urls (
@@ -954,6 +974,7 @@ app.post('/api/urls', requireAdmin, async (req, res) => {
         link_password, webhook_url,
         utm_source, utm_medium, utm_campaign,
         forward_query, qr_color_dark, qr_color_light,
+        request_gps,
         created_at, updated_at
       )
       VALUES (
@@ -963,6 +984,7 @@ app.post('/api/urls', requireAdmin, async (req, res) => {
         ?, ?,
         ?, ?, ?,
         ?, ?, ?,
+        ?,
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
       )
     `);
@@ -985,7 +1007,8 @@ app.post('/api/urls', requireAdmin, async (req, res) => {
       utm_campaign ? utm_campaign.trim() : null,
       forward_query === false || forward_query === 0 ? 0 : 1,
       qr_color_dark ? qr_color_dark : '#0f172a',
-      qr_color_light ? qr_color_light : '#ffffff'
+      qr_color_light ? qr_color_light : '#ffffff',
+      requestGpsValue
     );
 
     const created = db.prepare('SELECT * FROM short_urls WHERE id = ?').get(info.lastInsertRowid);
@@ -1023,7 +1046,8 @@ app.put('/api/urls/:id', requireAdmin, (req, res) => {
       utm_campaign,
       forward_query,
       qr_color_dark,
-      qr_color_light
+      qr_color_light,
+      request_gps
     } = req.body;
 
     if (!long_url) {
@@ -1033,6 +1057,8 @@ app.put('/api/urls/:id', requireAdmin, (req, res) => {
     if (!long_url.startsWith('http://') && !long_url.startsWith('https://')) {
       long_url = 'https://' + long_url;
     }
+
+    const requestGpsVal = request_gps !== undefined ? (request_gps ? 1 : 0) : null;
 
     const update = db.prepare(`
       UPDATE short_urls 
@@ -1053,6 +1079,7 @@ app.put('/api/urls/:id', requireAdmin, (req, res) => {
         forward_query = ?,
         qr_color_dark = COALESCE(?, qr_color_dark),
         qr_color_light = COALESCE(?, qr_color_light),
+        request_gps = COALESCE(?, request_gps),
         updated_at = CURRENT_TIMESTAMP 
       WHERE id = ?
     `);
@@ -1074,6 +1101,7 @@ app.put('/api/urls/:id', requireAdmin, (req, res) => {
       forward_query === false || forward_query === 0 ? 0 : 1,
       qr_color_dark || null,
       qr_color_light || null,
+      requestGpsVal,
       id
     );
 
@@ -1251,6 +1279,193 @@ app.get('/:slug/qr', async (req, res) => {
 });
 
 // -------------------------------------------------------------
+// ENDPOINT: RECEPCIÓN DE COORDENADAS GPS NATIVAS
+// -------------------------------------------------------------
+app.post('/api/gps/:slug', async (req, res) => {
+  try {
+    const { slug } = req.params;
+    const { latitude, longitude, accuracy } = req.body;
+
+    const record = db.prepare('SELECT * FROM short_urls WHERE slug = ?').get(slug);
+    if (!record) {
+      return res.status(404).json({ error: 'Enlace no encontrado' });
+    }
+
+    const ua = req.headers['user-agent'] || '';
+    const referer = req.headers['referer'] || req.headers['referrer'] || '';
+    const clientIp = getClientIp(req);
+    const acceptLanguage = parseLanguage(req.headers['accept-language']);
+    const { deviceType, os, browser } = parseUserAgent(ua);
+
+    const latVal = typeof latitude === 'number' ? latitude : parseFloat(latitude);
+    const lonVal = typeof longitude === 'number' ? longitude : parseFloat(longitude);
+
+    let visitId = null;
+    try {
+      const info = db.prepare(`
+        INSERT INTO visits (
+          slug, user_agent, device_type, os, browser, referer, is_bot,
+          ip_address, user_language, latitude, longitude,
+          city_name, country_name, country_code, timezone
+        )
+        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 'Ubicación GPS (Exacta)', 'Chile', 'CL', 'America/Santiago')
+      `).run(
+        slug, ua, deviceType, os, browser, referer,
+        clientIp, acceptLanguage, latVal, lonVal
+      );
+      visitId = info.lastInsertRowid;
+      db.prepare('UPDATE short_urls SET visits_count = visits_count + 1 WHERE id = ?').run(record.id);
+    } catch (e) {
+      console.error('Error guardando visita GPS:', e.message);
+    }
+
+    // Disparar Webhook (Telegram / Discord) con las coordenadas reales
+    const targetWebhook = record.webhook_url || getSetting('global_webhook_url', '');
+    if (targetWebhook) {
+      dispatchWebhook(targetWebhook, {
+        event: 'qr_scanned_gps',
+        slug: slug,
+        title: record.title || slug,
+        short_url: `${BASE_URL}/${slug}`,
+        destination: record.long_url,
+        visited_at: new Date().toISOString(),
+        ip: clientIp || 'Desconocida',
+        location: {
+          country: 'Chile',
+          country_code: 'CL',
+          region: 'GPS Móvil',
+          city: 'Ubicación GPS Real',
+          flag: '📍',
+          coordinates: `${latVal}, ${lonVal}`,
+          timezone: 'America/Santiago'
+        },
+        network: {
+          isp: 'Dispositivo GPS Satelital',
+          org: accuracy ? `Precisión: ±${Math.round(accuracy)}m` : 'GPS Móvil'
+        },
+        device_type: deviceType,
+        os: os,
+        browser: browser,
+        language: acceptLanguage,
+        referer: referer || 'Directo (Escaneo QR GPS)',
+        query_params: req.query,
+        total_scans: (record.visits_count || 0) + 1
+      });
+    }
+
+    // Determinar destino final (inyectar origen si es ruta de Google Maps)
+    let destination = record.long_url;
+    if (destination.includes('google.com/maps/dir/')) {
+      try {
+        const u = new URL(destination);
+        if (!u.searchParams.has('origin') && latVal && lonVal) {
+          u.searchParams.set('origin', `${latVal},${lonVal}`);
+          destination = u.toString();
+        }
+      } catch {}
+    }
+
+    res.json({ ok: true, destination, visit_id: visitId });
+  } catch (error) {
+    console.error('Error en /api/gps/:slug:', error);
+    res.status(500).json({ error: 'Error procesando coordenadas GPS' });
+  }
+});
+
+// Renderizador de Pantalla Intermedia para Solicitar GPS Real
+function renderGpsRequestPage(slug, title, destination) {
+  return `
+    <!DOCTYPE html>
+    <html lang="es" class="dark">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${title || 'Continuar al destino'}</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+      <style>body { font-family: 'Plus Jakarta Sans', sans-serif; }</style>
+    </head>
+    <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
+      <div class="max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 text-center shadow-2xl backdrop-blur-xl">
+        <div class="w-16 h-16 mx-auto mb-5 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center text-3xl font-bold shadow-lg shadow-cyan-950/40 animate-pulse">
+          📍
+        </div>
+        <h1 class="text-xl font-bold text-white mb-1.5">${title || 'Continuar al destino'}</h1>
+        <p class="text-xs text-slate-400 mb-6 leading-relaxed">
+          Para brindarte la mejor experiencia y trazar la ruta más directa hacia tu destino, necesitamos verificar tu ubicación GPS.
+        </p>
+        
+        <p id="gpsStatus" class="text-xs font-semibold text-cyan-400 mb-4 min-h-[1.25rem]"></p>
+        
+        <div class="space-y-3">
+          <button 
+            id="btnGps" 
+            type="button" 
+            class="w-full py-3.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 transition active:scale-[0.98]"
+          >
+            <span>📍 Compartir mi ubicación y ver la ruta</span>
+          </button>
+          
+          <a 
+            href="/${slug}?nogps=1" 
+            class="block w-full py-2.5 px-4 bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 rounded-xl text-xs font-medium transition"
+          >
+            Continuar sin compartir ubicación
+          </a>
+        </div>
+      </div>
+
+      <script>
+        const btn = document.getElementById('btnGps');
+        const status = document.getElementById('gpsStatus');
+
+        btn.addEventListener('click', () => {
+          if (!navigator.geolocation) {
+            status.textContent = 'Tu navegador no soporta geolocalización. Redirigiendo...';
+            setTimeout(() => { window.location.href = '/${slug}?nogps=1'; }, 800);
+            return;
+          }
+
+          status.textContent = 'Solicitando permiso de GPS a tu dispositivo...';
+          btn.disabled = true;
+          btn.style.opacity = '0.7';
+
+          navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+              status.textContent = 'Ubicación verificada. Abriendo ruta...';
+              try {
+                const res = await fetch('/api/gps/${slug}', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy
+                  })
+                });
+                const data = await res.json();
+                if (data.destination) {
+                  window.location.href = data.destination;
+                  return;
+                }
+              } catch (e) {}
+              window.location.href = '/${slug}?nogps=1';
+            },
+            (err) => {
+              status.textContent = 'Permiso no otorgado. Continuando al destino...';
+              setTimeout(() => { window.location.href = '/${slug}?nogps=1'; }, 600);
+            },
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+          );
+        });
+      </script>
+    </body>
+    </html>
+  `;
+}
+
+// -------------------------------------------------------------
 // REDIRECCIÓN DINÁMICA ULTRA-RÁPIDA (GET /:slug)
 // Con Smart Routing: iOS/Android, Expiración, Límite, Password, UTMs y Webhooks
 // -------------------------------------------------------------
@@ -1293,6 +1508,11 @@ app.get('/:slug', async (req, res, next) => {
       if (userUnlockCookie !== expectedUnlockKey) {
         return res.send(renderPasswordPage(slug, record.title));
       }
+    }
+
+    // 3.5 Verificación de Solicitud de GPS Real (Página Intermedia)
+    if (record.request_gps === 1 && req.query.nogps !== '1') {
+      return res.send(renderGpsRequestPage(slug, record.title, record.long_url));
     }
 
     // 4. Analítica Enriquecida, Geolocalización e IP Real

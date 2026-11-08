@@ -126,7 +126,8 @@ function setupEventListeners() {
       utm_medium: document.getElementById('utmMediumInput').value.trim(),
       utm_campaign: document.getElementById('utmCampaignInput').value.trim(),
       qr_color_dark: document.getElementById('qrColorDarkInput').value,
-      qr_color_light: document.getElementById('qrColorLightInput').value
+      qr_color_light: document.getElementById('qrColorLightInput').value,
+      request_gps: document.getElementById('requestGpsCheckbox') ? (document.getElementById('requestGpsCheckbox').checked ? 1 : 0) : 0
     };
 
     try {
@@ -187,7 +188,8 @@ function setupEventListeners() {
       max_visits: document.getElementById('editMaxVisitsInput').value || null,
       fallback_url: document.getElementById('editFallbackUrlInput').value.trim(),
       link_password: document.getElementById('editLinkPasswordInput').value.trim(),
-      webhook_url: document.getElementById('editWebhookUrlInput').value.trim()
+      webhook_url: document.getElementById('editWebhookUrlInput').value.trim(),
+      request_gps: document.getElementById('editRequestGpsCheckbox') ? (document.getElementById('editRequestGpsCheckbox').checked ? 1 : 0) : 0
     };
 
     try {
@@ -336,6 +338,9 @@ function renderTable(urls) {
     if (u.webhook_url) {
       badges.push('<span class="bg-purple-950 text-purple-400 border border-purple-800 px-1.5 py-0.5 rounded text-[10px]">🔔 Webhook</span>');
     }
+    if (u.request_gps) {
+      badges.push('<span class="bg-indigo-950 text-indigo-400 border border-indigo-700 px-1.5 py-0.5 rounded text-[10px]">📍 GPS Real</span>');
+    }
     if (u.expires_at && !u.is_expired) {
       badges.push('<span class="bg-emerald-950 text-emerald-400 border border-emerald-800 px-1.5 py-0.5 rounded text-[10px]">⏳ Temporal</span>');
     }
@@ -451,6 +456,8 @@ window.openEditModal = function(id) {
   document.getElementById('editFallbackUrlInput').value = found.fallback_url || '';
   document.getElementById('editLinkPasswordInput').value = found.link_password || '';
   document.getElementById('editWebhookUrlInput').value = found.webhook_url || '';
+  const editGpsEl = document.getElementById('editRequestGpsCheckbox');
+  if (editGpsEl) editGpsEl.checked = Boolean(found.request_gps);
 
   document.getElementById('editModal').classList.remove('hidden');
   refreshIcons();
@@ -1063,6 +1070,19 @@ window.closeAnalyticsModal = function() {
   if (modal) modal.classList.add('hidden');
 };
 
+function formatChileDate(rawDate) {
+  if (!rawDate) return '--';
+  let s = String(rawDate).trim();
+  if (!s.includes('T')) s = s.replace(' ', 'T');
+  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(s)) s += 'Z';
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? rawDate : d.toLocaleString('es-CL', {
+    timeZone: 'America/Santiago',
+    day: '2-digit', month: '2-digit', year: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+  });
+}
+
 function renderAnalyticsModal(data, isGlobal) {
   const u = data.url;
   const s = data.summary;
@@ -1202,11 +1222,7 @@ function renderAnalyticsModal(data, isGlobal) {
   }
 
   vBody.innerHTML = visits.map(v => {
-    const dateObj = new Date(v.visited_at);
-    const dateFormatted = !isNaN(dateObj) ? dateObj.toLocaleString('es-CL', {
-      day: '2-digit', month: '2-digit', year: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit'
-    }) : v.visited_at;
+    const dateFormatted = formatChileDate(v.visited_at);
 
     const locationParts = [];
     if (v.city_name) locationParts.push(v.city_name);

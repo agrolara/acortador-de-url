@@ -2,8 +2,9 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-# Instalar curl para healthcheck
-RUN apk add --no-cache curl
+# Instalar curl para healthcheck y tzdata para zona horaria de Chile
+RUN apk add --no-cache curl tzdata
+ENV TZ=America/Santiago
 
 # Copiar archivos de dependencias
 COPY package*.json ./
